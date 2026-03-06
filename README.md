@@ -28,6 +28,7 @@ This installs the skill into whichever AI coding agents you have (Claude Code, A
 
 ```bash
 /plugin marketplace add slicervm/agent-skills
+/plugin install use-slicer@slicer
 ```
 
 ### Manual

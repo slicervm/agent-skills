@@ -1,0 +1,22 @@
+{
+  "name": "slicer",
+  "owner": {
+    "name": "SlicerVM"
+  },
+  "plugins": [
+    {
+      "name": "use-slicer",
+      "source": "./skills/use-slicer",
+      "description": "Use Slicer to launch Linux microVMs for sandboxed builds, E2E tests, Docker, CI, and isolated dev environments — works from macOS and Linux hosts",
+      "version": "1.0.0",
+      "author": {
+        "name": "SlicerVM"
+      },
+      "homepage": "https://slicervm.com",
+      "repository": "https://github.com/slicervm/agent-skills",
+      "license": "MIT",
+      "keywords": ["slicer", "microvm", "firecracker", "sandbox", "vm", "docker", "ci"],
+      "strict": false
+    }
+  ]
+}
