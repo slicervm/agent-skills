@@ -26,6 +26,40 @@ Go SDK: https://github.com/slicervm/sdk (`github.com/slicervm/sdk`)
 
 Slicer is **not a SaaS**. It requires a running daemon that manages VMs. There are several ways to get one:
 
+### Deterministic Workflow (Default)
+
+For agent tasks that can create infrastructure, use this default pattern:
+
+1. Reuse the session VM when already known (for example, because the same workflow tagged VM was created earlier in this run). Otherwise create a new VM and tag it.
+2. Track and pass the session VM name forward (instead of switching to an arbitrary existing VM) so subsequent commands in the same session stay on the same instance.
+3. Tag VMs so they are identifiable later, for example `workflow=<slug>`.
+4. Run in-VM commands with native `slicer vm` operations (`exec`, `cp`, `shell`).
+   - Use `slicer vm exec` for short, atomic commands.
+   - Use `slicer vm shell` for long sessions or multiple related commands (interactive PTY).
+5. Prefer native Slicer commands over SSH even when SSH is available.
+
+Example:
+
+```bash
+WORKFLOW=ci-$(date +%Y%m%d-%H%M%S)
+# Reuse SESSION_VM if already set for this run, else create once and record it.
+if [ -n "${SLICER_SESSION_VM:-}" ]; then
+  VM_NAME="$SLICER_SESSION_VM"
+else
+  VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {print $2; exit}')
+  slicer vm ready "$VM_NAME"
+  export SLICER_SESSION_VM="$VM_NAME"
+fi
+
+# then use returned hostname in subsequent commands:
+slicer vm exec "$VM_NAME" --uid 1000 -- "uname -a"
+slicer vm cp ./local.txt "$VM_NAME":/tmp/local.txt --uid 1000
+# for longer interactive work, open a shell session instead of repeating many one-off execs:
+slicer vm shell "$VM_NAME" --uid 1000
+
+# use exec for deterministic one-liners; use shell for ongoing interactive workflows
+```
+
 ### Option A: macOS — slicer-mac (already running)
 
 If the user is on macOS with slicer-mac installed, the daemon is already running. No setup needed.
@@ -74,12 +108,17 @@ Otherwise the VM keeps its state between sessions — installed packages, files,
 If Slicer is already running on the machine (or a LAN machine), connect to it. **Ask the user** for the URL and token path — don't guess.
 
 ```bash
-# Local unix socket (no auth)
+# Local unix socket (no auth; may require sudo/root to read the socket)
 export SLICER_URL=/path/to/slicer.sock
 
 # Local TCP
 export SLICER_URL=http://127.0.0.1:8080
+# Local API token may require sudo/root to read unless explicitly provided
 export SLICER_TOKEN_FILE=/var/lib/slicer/auth/token
+
+# Prefer explicit env vars when token file is not accessible:
+export SLICER_TOKEN=$(sudo cat /var/lib/slicer/auth/token)
+# or let user provide a token: export SLICER_TOKEN_FILE=...
 
 # Remote machine on LAN
 export SLICER_URL=https://192.168.1.50:8080
@@ -91,6 +130,11 @@ Check for a running daemon:
 ```bash
 ps aux | grep -E "slicer|firecracker" | grep -v grep
 ```
+
+Notes:
+- For a local TCP API (`http://127.0.0.1:8080`), read `/var/lib/slicer/auth/token` only with sufficient privileges (typically `sudo`).
+- If the user provides `SLICER_TOKEN`/`SLICER_TOKEN_FILE`, use those values directly and avoid guessing defaults.
+- If a specific remote endpoint is provided (for example, `192.168.1.25:8080`), use that URL as given and do not infer local token path behavior.
 
 ### Option D: Linux — start a new Slicer daemon
 
@@ -156,6 +200,16 @@ Use `--json` for machine-readable output.
 slicer vm add HOSTGROUP --url "$SLICER_URL" --token-file "$SLICER_TOKEN_FILE"
 ```
 
+If SSH access is needed, configure key material at launch time:
+- for local keys: pass via `--ssh-key`
+- for GitHub key import: pass via `--github USERNAME`
+
+Use `slicer vm add --help` first to verify current flag names and supported auth options before constructing the launch command.
+
+```bash
+slicer vm add --help
+```
+
 The hostname is printed on creation (e.g. `demo-3`). Key flags:
 
 | Flag | Purpose |
@@ -165,26 +219,28 @@ The hostname is printed on creation (e.g. `demo-3`). Key flags:
 | `--userdata '#!/bin/bash\n...'` | Bootstrap script |
 | `--userdata-file ./setup.sh` | Bootstrap from file |
 | `--ssh-key "ssh-ed25519 ..."` | Inject SSH public key |
-| `--ready agent` | Block until agent is ready |
-| `--ready userdata` | Block until userdata finishes |
+| `--github USERNAME` | Import SSH keys from GitHub user |
 | `--shell` | Open shell immediately after boot |
 | `--tag env=ci` | Metadata tags |
 | `--secrets secret1,secret2` | Allow access to named secrets |
+
+Important: do not use readiness flags on `slicer vm add`. If startup blocking or readiness is required, run `slicer vm ready <VM_NAME>` as a separate step.
+
+When creating VMs for mutable tasks, avoid targeting arbitrary existing names (especially `slicer-1` on slicer-mac). Reuse the session's tagged VM when known; otherwise create a new VM with explicit `--tag` unless the user says otherwise.
 
 ### Wait for readiness
 
 ```bash
 # Block until the slicer-agent is responsive (default)
-slicer vm ready VM_NAME --url "$SLICER_URL" --token-file "$SLICER_TOKEN_FILE"
+slicer vm ready VM_NAME --agent --timeout 5m
 
 # Block until userdata script has finished
 slicer vm ready VM_NAME --userdata --timeout 5m
-
-# Block for both agent AND userdata
-slicer vm ready VM_NAME --agent --userdata --timeout 5m
 ```
 
 `--agent` waits for the in-VM slicer-agent (vsock RPC). `--userdata` waits for the bootstrap script to complete (guarded by `/etc/slicer/userdata-ran` in the guest). Polling interval: `--interval 100ms` (default).
+
+Prefer `slicer vm shell` for interactive workflows that need command history, incremental state, and a stable PTY.
 
 ### Non-blocking health check
 
@@ -235,6 +291,8 @@ slicer vm shell VM_NAME
 
 Flags: `--uid`, `--cwd`, `--bootstrap "command"` (run on connect).
 
+Use `slicer vm shell` for longer interactive work; keep `slicer vm exec` for bounded command calls.
+
 ---
 
 ## File Transfer
@@ -273,15 +331,30 @@ Key flags:
 
 ## Port Forwarding
 
-Forward ports from VMs to your local machine using `-L` (SSH-style syntax):
+Forward traffic from VMs to your local machine with `slicer vm forward` (the command is `forward`, not `port-forward`), using `-L` (SSH-style) syntax.
 
 ```bash
+# Always check the local host port is free before forwarding.
+PORT=8080
+if command -v lsof >/dev/null 2>&1; then
+  if lsof -i TCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Local port $PORT is already in use. Pick a different host port (for example 18080)."
+    exit 1
+  fi
+else
+  echo "Cannot validate local port availability (lsof not installed); proceed with caution."
+fi
+
 # TCP port forward
 slicer vm forward VM_NAME -L 8080:127.0.0.1:8080
 
-# Remap ports
+# Remap host port
 slicer vm forward VM_NAME -L 3000:127.0.0.1:8080
 
+# Supported mapping forms:
+# - TCP -> TCP: LOCAL_HOST:LOCAL_PORT:REMOTE_HOST:REMOTE_PORT
+# - Unix socket -> TCP: LOCAL_HOST:LOCAL_PORT:REMOTE_SOCKET
+# - Unix socket -> Unix socket: LOCAL_SOCKET:REMOTE_SOCKET
 # Unix socket → local TCP (e.g. Docker)
 slicer vm forward VM_NAME -L 127.0.0.1:2375:/var/run/docker.sock
 
@@ -290,6 +363,10 @@ slicer vm forward VM_NAME -L /tmp/docker.sock:/var/run/docker.sock
 
 # SSH access
 slicer vm forward VM_NAME -L 2222:127.0.0.1:22
+
+# Privileged VM services (e.g. nginx on 80/443) should use high host ports unless requested otherwise.
+slicer vm forward VM_NAME -L 8080:127.0.0.1:80
+slicer vm forward VM_NAME -L 8443:127.0.0.1:443
 
 # Multiple forwards at once
 slicer vm forward VM_NAME -L 8080:127.0.0.1:8080 -L 5432:127.0.0.1:5432
@@ -353,11 +430,13 @@ Use `.slicerignore` at workspace root to exclude files (same syntax as `.gitigno
 ### Run E2E tests in isolation
 
 ```bash
-slicer vm add sandbox --ready agent
-slicer vm cp ./project/ sandbox-1:/home/ubuntu/project/ --uid 1000
-slicer vm exec sandbox-1 --uid 1000 --cwd ~/project -- "npm install && npm test"
-slicer vm cp sandbox-1:/home/ubuntu/project/test-results/ ./results/
-slicer vm delete sandbox-1
+WORKFLOW=e2e-$(date +%Y%m%d-%H%M%S)
+VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {print $2; exit}')
+slicer vm ready "$VM_NAME"
+slicer vm cp ./project/ "$VM_NAME":/home/ubuntu/project/ --uid 1000
+slicer vm exec "$VM_NAME" --uid 1000 --cwd ~/project -- "npm install && npm test"
+slicer vm cp "$VM_NAME":/home/ubuntu/project/test-results/ ./results/
+slicer vm delete "$VM_NAME"
 ```
 
 ### Remote Docker from macOS
@@ -375,22 +454,37 @@ docker run -d -p 8080:8080 myapp
 ### Build Go/Rust on Linux from macOS
 
 ```bash
-slicer vm add sandbox --ready agent
-slicer vm cp ./myproject/ sandbox-1:/home/ubuntu/myproject/ --uid 1000
-slicer vm exec sandbox-1 --uid 1000 --cwd ~/myproject -- "make build"
-slicer vm cp sandbox-1:/home/ubuntu/myproject/bin/app ./bin/app-linux
-slicer vm delete sandbox-1
+WORKFLOW=build-$(date +%Y%m%d-%H%M%S)
+VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {print $2; exit}')
+slicer vm ready "$VM_NAME"
+slicer vm cp ./myproject/ "$VM_NAME":/home/ubuntu/myproject/ --uid 1000
+slicer vm exec "$VM_NAME" --uid 1000 --cwd ~/myproject -- "make build"
+slicer vm cp "$VM_NAME":/home/ubuntu/myproject/bin/app ./bin/app-linux
+slicer vm delete "$VM_NAME"
 ```
 
 ### Quick k3s cluster
 
 ```bash
-slicer vm exec VM_NAME --uid 1000 -- "curl -sfL https://get.k3s.io | sh -"
-slicer vm ready VM_NAME --userdata --timeout 2m
-slicer vm forward VM_NAME -L 6443:127.0.0.1:6443 &
-slicer vm cp VM_NAME:/etc/rancher/k3s/k3s.yaml ./k3s.yaml
+WORKFLOW=k3s-$(date +%Y%m%d-%H%M%S)
+VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {print $2; exit}')
+slicer vm ready "$VM_NAME"
+# Install Kubernetes CLIs with arkade (already available on slicer images).
+# Default install path is ~/.arkade/bin.
+slicer vm exec "$VM_NAME" --uid 1000 -- "arkade get k3sup kubectl helm"
+slicer vm exec "$VM_NAME" --uid 1000 -- "curl -sfL https://get.k3s.io | sh -"
+slicer vm ready "$VM_NAME" --userdata --timeout 2m
+slicer vm forward "$VM_NAME" -L 6443:127.0.0.1:6443 &
+slicer vm cp "$VM_NAME":/etc/rancher/k3s/k3s.yaml ./k3s.yaml
+export PATH=$PATH:$HOME/.arkade/bin
 KUBECONFIG=./k3s.yaml kubectl get nodes
 ```
+
+For Kubernetes bootstrap workflows, prefer pulling toolchain CLIs via `arkade` (for example `arkade get k3sup kubectl` and `arkade get helm`) rather than external ad-hoc installers. Keep in mind the binaries are under `~/.arkade/bin`.
+
+Do not start cluster accessibility flows (such as `kubectl port-forward`) inside `userdata`. Use `userdata` only for setup/bootstrap tasks, then use `slicer vm forward` from the host after VM readiness for host access.
+
+Also avoid any blocking call inside `userdata`; keep it non-interactive and short-lived. Port-forwarding, shell sessions, and long-running daemons should be started after VM boot.
 
 ### Database testing
 
@@ -407,6 +501,8 @@ slicer vm forward VM_NAME -L 2222:127.0.0.1:22 &
 ssh -p 2222 ubuntu@127.0.0.1 uptime
 scp -P 2222 ./file.txt ubuntu@127.0.0.1:/tmp/
 ```
+
+Use SSH/SCP only if the task explicitly requires them (e.g., external scripts that only accept SSH). Otherwise, prefer `slicer vm exec` and `slicer vm cp`.
 
 ---
 
@@ -425,13 +521,15 @@ Slicer-mac runs a single Linux VM on Apple Silicon or Intel Macs, giving you a p
 ```bash
 # On macOS — just works, no flags
 slicer vm list
-slicer vm exec slicer-1 --uid 1000 -- "uname -a"
+VM_NAME=$(slicer vm add sbox --tag "workflow=smoke" | awk '/Hostname:/ {print $2; exit}')
+slicer vm ready "$VM_NAME"
+slicer vm exec "$VM_NAME" --uid 1000 -- "uname -a"
 
 # Launch an ephemeral sandbox
-slicer vm add sbox
-slicer vm ready sbox-1
-slicer vm exec sbox-1 --uid 1000 -- "make test"
-slicer vm delete sbox-1
+VM_NAME=$(slicer vm add sbox | awk '/Hostname:/ {print $2; exit}')
+slicer vm ready "$VM_NAME"
+slicer vm exec "$VM_NAME" --uid 1000 -- "make test"
+slicer vm delete "$VM_NAME"
 ```
 
 ---
@@ -506,11 +604,12 @@ The default images are:
 
 ```bash
 # 1. Start a VM, customise it
-slicer vm add demo --ready agent
-slicer vm exec demo-1 --uid 1000 -- "sudo apt update && sudo apt install -y docker.io nginx golang"
+VM_NAME=$(slicer vm add demo | awk '/Hostname:/ {print $2; exit}')
+slicer vm ready "$VM_NAME"
+slicer vm exec "$VM_NAME" --uid 1000 -- "sudo apt update && sudo apt install -y docker.io nginx golang"
 
 # 2. Export the disk
-slicer disk export demo-1 --output my-custom-image.img
+slicer disk export "$VM_NAME" --output my-custom-image.img
 
 # 3. Use it in config
 slicer new mygroup --image ghcr.io/myorg/my-custom-image:latest > config.yaml
@@ -529,6 +628,11 @@ config:
 ### Userdata (cloud-init style bootstrap)
 
 Slicer supports userdata scripts — shell scripts that run once on first boot (similar to cloud-init). The script runs as root and is guarded by `/etc/slicer/userdata-ran` so it only executes once per disk.
+
+Guideline: keep `userdata` strictly non-interactive and non-blocking.
+- Scope: package install, user setup, and system configuration only.
+- Avoid any long-running or interactive commands.
+- Never use `kubectl port-forward`, `slicer vm forward`, background process launch, or shell interactivity in `userdata`.
 
 ```bash
 # Inline
@@ -608,7 +712,7 @@ slicer activate         # Activate Slicer Home Edition license
 | Problem | Fix |
 |---------|-----|
 | Connection refused | Slicer daemon not running — start with `sudo -E slicer up config.yaml` |
-| Permission denied | Use `sudo` for unix socket commands, or check `--token-file` for HTTP |
+| Permission denied | Use `sudo` for unix socket access, or verify `--token-file`/`--token` and local TCP credentials |
 | VM not responding | `slicer vm ready VM_NAME --timeout 60s` |
 | Command hangs | Background processes in exec can hang — use `nohup ... &` |
 | Stale state | Delete `.img` and `.lock` files to reset persistent disks |
