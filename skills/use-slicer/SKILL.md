@@ -273,10 +273,18 @@ Key flags:
 
 | Flag | Purpose |
 |------|---------|
-| `--uid 1000` | Run as ubuntu user (passwordless sudo) |
-| `--cwd ~/project` | Set working directory |
-| `--env KEY=VALUE` | Pass environment variables (repeatable) |
+| `--uid` | Run as target user UID (non-root default is auto-detected, typically `1000`) |
+| `--cwd string` | Set working directory (`~` and `~/path` supported, `../` traversal is blocked) |
+| `--env stringArray` | Pass environment variables as `KEY=VALUE` pairs (repeatable) |
 | `--shell ""` | Skip shell interpreter, exec directly |
+
+`--cwd` and `--env` are direct `slicer vm exec` flags (confirmed from `slicer vm exec --help`).
+
+Example:
+
+```bash
+slicer vm exec VM_NAME --uid 1000 --cwd ~/project --env FOO=bar --env DEBUG=1 -- "env | sort | head -n 5"
+```
 
 Pipes and stdin work:
 
@@ -294,7 +302,9 @@ slicer vm exec VM_NAME -- "ps aux | grep nginx"
 slicer vm shell VM_NAME
 ```
 
-Flags: `--uid`, `--cwd`, `--bootstrap "command"` (run on connect).
+Flags (from `slicer vm shell --help`): `--uid`, `--cwd`, `--shell`, `--bootstrap "command"` (run on connect).
+
+- `--env` is **not** a `slicer vm shell` flag; pass env vars inside the shell once connected or use `slicer vm exec --env`.
 
 Use `slicer vm shell` for longer interactive work; keep `slicer vm exec` for bounded command calls.
 
