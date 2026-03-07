@@ -258,6 +258,11 @@ slicer vm health VM_NAME --json    # Agent version, uptime, stats — does not b
 slicer vm exec VM_NAME -- "whoami"
 ```
 
+By default, `slicer vm exec` executes the command through a shell, so use direct command strings.
+For plain exec with no shell interpretation, use `--shell ""`.
+Avoid wrapping with `/bin/bash -lc` or explicit shell launches unless you intentionally need shell-specific parsing.
+Anti-pattern: `slicer vm exec ... -- /bin/bash -lc "..."` (unless required for nested shell logic).
+
 The default user is auto-detected (typically `ubuntu`, uid 1000). Override with `--uid`:
 
 ```bash
