@@ -70,6 +70,12 @@ slicer info
 slicer vm list
 ```
 
+On slicer-mac, always launch API-created microVMs with explicit `sbox` host group:
+
+```bash
+slicer vm add sbox --tag workflow=<slug>
+```
+
 Socket: `~/slicer-mac/slicer.sock`. Auth: off by default. See the [macOS section](#slicer-on-macos-slicer-mac) below.
 
 ### Option B: Slicer Box — hosted at box.slicervm.com
@@ -170,6 +176,10 @@ sudo -E slicer up ./sandbox.yaml &
 # Back on your local machine — use the remote API
 export SLICER_URL=http://192.168.1.50:8080
 export SLICER_TOKEN_FILE=./remote-token  # copy token from remote /var/lib/slicer/auth/token
+
+# Remote Linux slicer endpoints typically already have pre-created VMs.
+# Prefer reusing existing VMs from `slicer vm list` rather than creating new ones
+# with `slicer vm add`, unless the user explicitly asks to create a VM.
 slicer vm list --url "$SLICER_URL" --token-file "$SLICER_TOKEN_FILE"
 ```
 
@@ -201,8 +211,8 @@ slicer vm add HOSTGROUP --url "$SLICER_URL" --token-file "$SLICER_TOKEN_FILE"
 ```
 
 If SSH access is needed, configure key material at launch time:
-- for local keys: pass via `--ssh-key`
-- for GitHub key import: pass via `--github USERNAME`
+- for local keys: pass a real public key string via `--ssh-key`
+- for GitHub key import: pass via `--import-user USERNAME`
 
 Use `slicer vm add --help` first to verify current flag names and supported auth options before constructing the launch command.
 
@@ -219,14 +229,14 @@ The hostname is printed on creation (e.g. `demo-3`). Key flags:
 | `--userdata '#!/bin/bash\n...'` | Bootstrap script |
 | `--userdata-file ./setup.sh` | Bootstrap from file |
 | `--ssh-key "ssh-ed25519 ..."` | Inject SSH public key |
-| `--github USERNAME` | Import SSH keys from GitHub user |
+| `--import-user USERNAME` | Import SSH keys from GitHub user |
 | `--shell` | Open shell immediately after boot |
 | `--tag env=ci` | Metadata tags |
 | `--secrets secret1,secret2` | Allow access to named secrets |
 
 Important: do not use readiness flags on `slicer vm add`. If startup blocking or readiness is required, run `slicer vm ready <VM_NAME>` as a separate step.
 
-When creating VMs for mutable tasks, avoid targeting arbitrary existing names (especially `slicer-1` on slicer-mac). Reuse the session's tagged VM when known; otherwise create a new VM with explicit `--tag` unless the user says otherwise.
+When creating VMs for mutable tasks, do not target or reuse `slicer-1` on slicer-mac unless the user explicitly requests it. Reuse the session's tagged VM when known; otherwise create a new VM with explicit `--tag`.
 
 ### Wait for readiness
 
@@ -305,8 +315,10 @@ slicer vm shell VM_NAME
 Flags (from `slicer vm shell --help`): `--uid`, `--cwd`, `--shell`, `--bootstrap "command"` (run on connect).
 
 - `--env` is **not** a `slicer vm shell` flag; pass env vars inside the shell once connected or use `slicer vm exec --env`.
+- `--shell` in `slicer vm shell` is shell-choice only; do not assume `zsh` is installed.
 
 Use `slicer vm shell` for longer interactive work; keep `slicer vm exec` for bounded command calls.
+It opens an interactive PTY, so it is not suited to non-interactive stdin pipelines.
 
 ---
 
@@ -573,7 +585,7 @@ Key flags for `slicer new`:
 | `--storage image` | Persistent disk mode (default) |
 | `--storage-size 25G` | Disk size |
 | `--ssh-key "ssh-ed25519 ..."` | Inject SSH key |
-| `--github USERNAME` | Import SSH keys from GitHub |
+| `--import-user USERNAME` | Import SSH keys from GitHub |
 | `--userdata-file ./setup.sh` | Userdata script |
 | `--graceful-shutdown=false` | Fast teardown |
 | `--min` | Minimal image (faster boot, no Docker/K8s) |

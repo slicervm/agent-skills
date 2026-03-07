@@ -21,7 +21,9 @@ Use this skill when the user asks for:
 - For single-node local installs on a slicer VM: prefer `k3sup install --local` from that VM.
 - For any remote install (`--host` / `--ip`), always make SSH identity explicit (`--ssh-key`) and run from your current host.
 - For `k3sup-pro`, run from a host with SSH access to the target VMs, not inside the target VM.
-- For API-launched slicer VMs that need SSH, pass identity at launch with `--ssh-key` or `--github` on `slicer vm add`.
+- For API-launched slicer VMs that need SSH, pass identity at launch with `--ssh-key` using a raw public key string (from `$(cat ~/.ssh/id_ed25519.pub)`), or use `--import-user` to import keys by GitHub username.
+- On slicer-mac, do not target or reuse `slicer-1` unless the user explicitly requests it.
+- On slicer-mac, any new API-launched VM must be created in the `sbox` host group (for example, `slicer vm add sbox ...`).
 
 ### Tool installation strategy (preferred)
 
@@ -228,6 +230,10 @@ k3sup-pro version --help
 - `--update`
 - `--verbose`
 
+`--servers` and `--user` are plan-only flags for `k3sup-pro`; do not pass them to `k3sup-pro apply`.
+
+Note: in current k3sup-pro behavior on this environment, `k3sup-pro apply` can fail with `handshake failed: unable to authenticate [none publickey]` if no SSH agent identity is available at apply time, even when `plan` included `--ssh-key`. Keep a valid key loaded in `ssh-agent` before running `apply`.
+
 `k3sup-pro install`
 - same install flags as `k3sup install`, plus `--cluster` for embedded etcd flow.
 
@@ -307,7 +313,7 @@ k3sup ready --kubeconfig kubeconfig
 
 HA cluster with k3sup-pro
 
-1. Build or collect hosts file:
+1. Build or collect a hosts file (JSON):
 
 ```json
 [
@@ -326,5 +332,42 @@ k3sup-pro apply plan.yaml
 k3sup-pro get-config plan.yaml --user ubuntu --ssh-key ~/.ssh/id_ed25519
 k3sup-pro ready --kubeconfig ./kubeconfig
 ```
+
+On slicer-mac, if `k3sup-pro` is needed and only one VM is available, use a single-entry devices file derived from `slicer vm list --json`:
+
+```bash
+slicer vm list --json | jq 'map({hostname, ip})' > devices.json
+k3sup get pro
+k3sup-pro plan devices.json --servers 1 --user ubuntu --ssh-key ~/.ssh/id_ed25519 > plan.yaml
+k3sup-pro apply plan.yaml
+```
+
+On environments where `k3sup-pro` fails with `handshake failed: unable to authenticate [none publickey]` when passing `--ssh-key`, run under an SSH agent-backed session and try again:
+
+```bash
+ssh-agent bash -c '
+  ssh-add ~/.ssh/id_ed25519
+  k3sup-pro plan devices.json --servers 1 --user ubuntu --output yaml > /tmp/plan.yaml
+  k3sup-pro apply /tmp/plan.yaml
+'
+```
+
+If it still fails with the same handshake error, verify host key auth first:
+
+```bash
+ssh -vvv -i ~/.ssh/id_ed25519 -o PreferredAuthentications=publickey ubuntu@<VM_IP> 'echo ok'
+```
+
+`k3sup-pro` requires a valid license context for `plan/apply`. If `k3sup-pro` returns:
+
+`invalid license, error: JWT parse error: token has invalid claims: token is expired`
+
+refresh licensing first:
+
+```bash
+k3sup-pro activate --access-token /path/to/access-token
+```
+
+Then rerun `k3sup-pro plan ...` and `k3sup-pro apply ...`.
 
 `k3sup-pro` should not be launched from inside target VMs; it orchestrates SSH sessions and should run from the control host.
