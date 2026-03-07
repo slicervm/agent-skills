@@ -232,7 +232,12 @@ k3sup-pro version --help
 
 `--servers` and `--user` are plan-only flags for `k3sup-pro`; do not pass them to `k3sup-pro apply`.
 
-Note: in current k3sup-pro behavior on this environment, `k3sup-pro apply` can fail with `handshake failed: unable to authenticate [none publickey]` if no SSH agent identity is available at apply time, even when `plan` included `--ssh-key`. Keep a valid key loaded in `ssh-agent` before running `apply`.
+Note: `k3sup-pro apply` uses SSH settings from the plan file (`user`, `ssh_key`, `ssh_port`) and should still succeed even when the terminal SSH agent has no keys, as long as the plan includes `--ssh-key`.
+
+If `apply` still reports `handshake failed: unable to authenticate [none publickey]`:
+- confirm the plan contains the correct `ssh_key` path and username for the target host;
+- verify passwordless SSH access for that key directly: `ssh -i <key> <user>@<ip> 'echo ok'`;
+- if needed, run plan/apply inside an SSH agent-backed shell or run with `SSH_AUTH_SOCK=`.
 
 `k3sup-pro install`
 - same install flags as `k3sup install`, plus `--cluster` for embedded etcd flow.
@@ -342,7 +347,7 @@ k3sup-pro plan devices.json --servers 1 --user ubuntu --ssh-key ~/.ssh/id_ed2551
 k3sup-pro apply plan.yaml
 ```
 
-On environments where `k3sup-pro` fails with `handshake failed: unable to authenticate [none publickey]` when passing `--ssh-key`, run under an SSH agent-backed session and try again:
+On environments where `k3sup-pro` still fails with `handshake failed: unable to authenticate [none publickey]`, run under an SSH agent-backed session and try again:
 
 ```bash
 ssh-agent bash -c '
