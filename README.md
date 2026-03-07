@@ -14,6 +14,15 @@ Comprehensive skill covering the full Slicer workflow — connecting to daemons 
 
 Works from macOS (via slicer-mac) and Linux hosts.
 
+### use-k3sup
+
+`skills/use-k3sup`
+
+Single-node and HA K3s provisioning with `k3sup` / `k3sup-pro`, using either:
+- local in-VM install (`k3sup install --local`)
+- remote install from your machine (`--host` / `--user`, typically `ubuntu`)
+- Slicer VM flows and SSH setup for API-launched guests
+
 ## Installation
 
 ### npx (recommended — works with 40+ agents)

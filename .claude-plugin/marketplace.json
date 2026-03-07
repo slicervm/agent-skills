@@ -17,6 +17,20 @@
       "license": "MIT",
       "keywords": ["slicer", "microvm", "firecracker", "sandbox", "vm", "docker", "ci"],
       "strict": false
+    },
+    {
+      "name": "use-k3sup",
+      "source": "./skills/use-k3sup",
+      "description": "Provision K3s clusters with k3sup (single-node and k3sup-pro HA) on local, Slicer, and remote VMs.",
+      "version": "1.0.0",
+      "author": {
+        "name": "SlicerVM"
+      },
+      "homepage": "https://github.com/slicervm/agent-skills",
+      "repository": "https://github.com/slicervm/agent-skills",
+      "license": "MIT",
+      "keywords": ["k3s", "kubernetes", "k3sup", "k3sup-pro", "slicer", "vm"],
+      "strict": false
     }
   ]
 }
