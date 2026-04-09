@@ -20,6 +20,18 @@ VMs boot in 1–3 seconds, have full systemd, internet access, and SSH pre-insta
 Docs: https://docs.slicervm.com
 Go SDK: https://github.com/slicervm/sdk (`github.com/slicervm/sdk`)
 
+## Slicer for Mac
+
+The Slicer CLI also works as a client for Slicer for Mac.
+
+Slicer for Mac ships a persistent Linux VM named `slicer-1` that can be used for local development and testing, with a permanent disk - it's analogous to WSL2.
+
+Slicer for Mac has 2x hostgroups which are fixed: `slicer` (may only launch 1x VM named `slicer-1`) and `sbox` (for ephemeral API-launched sandboxes).
+
+Slicer for Mac's socket is auto-detected at `~/slicer-mac/slicer.sock` - no `--url` needed.
+
+Slicer for Mac uses VMNet networking, which does not allow for inter-VM traffic, but does allow for host <> VM traffic. The host can access TCP ports on the VM directly by using its IP address shown on `slicer vm list`, or by using the `slicer vm forward` command which is similar to `ssh -L` or `kubectl port-forward` but for TCP traffic and UNIX sockets.
+
 ---
 
 ## Prerequisites — You Need a Running Daemon
@@ -193,6 +205,18 @@ Every `slicer vm` subcommand accepts `--url` and `--token-file` (or `--token`).
 
 ---
 
+## CLI shortcuts you should surface
+
+Slicer exposes a few **top-level shortcuts** for common VM operations (not for every `slicer vm ...` subcommand). Prefer showing these when they match what the user asked for:
+
+- `slicer ls` is a shortcut for `slicer vm list` (and `slicer vm list` itself has aliases `ls`/`l`)
+- `slicer shell` is a shortcut for `slicer vm shell`
+- `slicer cp` is a shortcut for `slicer vm cp`
+
+The `slicer vm` command group itself also has aliases: `slicer vm` == `slicer v`.
+
+---
+
 ## Working with VMs
 
 ### List VMs and host groups
@@ -327,20 +351,21 @@ It opens an interactive PTY, so it is not suited to non-interactive stdin pipeli
 ### Copy files to/from VMs
 
 ```bash
-# Single file (binary mode — the default when no --mode is given)
+# Single file (tar mode is the default; binary mode is available via --mode=binary)
 slicer vm cp ./local-file.txt VM_NAME:/tmp/file.txt --uid 1000
 
-# Single file from VM
+# Single file from VM (tar mode works for files too)
 slicer vm cp VM_NAME:/etc/os-release ./os-release.txt
 
-# Single file with custom permissions (binary mode)
+# Single file with custom permissions (binary mode only)
 slicer vm cp ./script.sh VM_NAME:/tmp/script.sh --mode=binary --permissions 0755 --uid 1000
 
-# Whole directory — use --mode=tar
-slicer vm cp ./my-project/ VM_NAME:/home/ubuntu/project/ --uid 1000 --mode=tar
+# Whole directory — prefer the top-level shortcut + `-r`
+# (use this instead of `slicer vm cp --mode=tar` when copying folders)
+slicer cp -r ./my-project/ VM_NAME:/home/ubuntu/project/ --uid 1000
 
 # Directory with exclusions
-slicer vm cp ./src/ VM_NAME:/home/ubuntu/src/ --uid 1000 --mode=tar \
+slicer cp -r ./src/ VM_NAME:/home/ubuntu/src/ --uid 1000 \
   --exclude '**/.git/**' --exclude '**/node_modules/**'
 ```
 
@@ -348,11 +373,21 @@ Key flags:
 
 | Flag | Purpose |
 |------|---------|
-| (no `--mode`) | Binary mode — single files only (default) |
-| `--mode=tar` | Tar mode — required for copying directories |
+| (default) | Tar mode — streams via tar unless binary mode is specified (`--mode` defaults to `tar`) |
+| `-r` / `--recursive` | Copy recursively using tar mode. Shortcut for `--mode=tar`. |
+| `--mode=binary` | Binary mode — supports files (not folders) and enables `--permissions` |
 | `--mode=binary --permissions 0755` | Binary mode with custom file permissions |
 | `--uid 1000` | File ownership |
 | `--exclude 'pattern'` | Glob exclude patterns (tar mode only, repeatable) |
+
+Notes (from `slicer vm cp --help`):
+- In tar mode host → VM, patterns from `.slicerignore` in the local source directory are applied in addition to `--exclude`.
+- In tar mode VM → host, the local destination is treated as a directory and will be created automatically if it does not exist.
+
+Practical guidance:
+- If copies are slow or huge, add a `.slicerignore` file in the directory you copy from (often your repo root) to skip heavyweight paths you don't need inside the VM.
+- Treat it like a `.gitignore` for `slicer cp -r` / tar-mode transfers (it cuts upload size and time).
+- Typical entries include build outputs and dependency caches such as `bin/`, `node_modules/`, `dist/`, `build/`, `.next/`, `target/`, `vendor/`, and large datasets/artifacts.
 
 ---
 
@@ -716,17 +751,17 @@ slicer disk transfer ...       # Compress + transfer via lz4
 ```bash
 slicer info             # Client + server version
 slicer version          # Client version only
-slicer vm route ./cfg   # Show routing commands (for remote access from Mac/Linux)
+slicer vm route ./cfg.yaml   # Show routing commands (for remote access from Mac/Linux)
 slicer install TOOL     # Install additional tools via OCI
 slicer update           # Replace binary with latest version
-slicer activate         # Activate Slicer Home Edition license
+slicer activate         # Legacy command for GitHub Sponsors and for trial users only. Most users should get a license key from their email and save it to ~/.slicer/LICENSE
 ```
 
 ---
 
 ## Important Notes
 
-1. **Default user**: uid auto-detected (ubuntu/1000). Use `--uid 1000` to be explicit.
+1. **Default user**: uid auto-detected (ubuntu/1000). Use `--uid 1000` to be explicit. On non-Ubuntu images, the user is `slicer`
 2. **First boot pulls image**: may take 30–60s on first run; subsequent boots are 1–3s.
 3. **Port forwards block**: run them in background with `&`.
 4. **Internet access**: VMs have outbound internet by default (bridge mode).
