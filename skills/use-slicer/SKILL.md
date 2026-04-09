@@ -8,12 +8,14 @@ tools: [Bash]
 
 Slicer gives you instant Linux microVMs powered by Firecracker. Use it when you need:
 
-- A real Linux environment (especially from macOS)
+- A real Linux environment with systemd, Internet access and SSH preinstalled(especially from macOS)
 - Sandboxed builds, CI, or E2E tests
 - Docker/container workflows with port forwarding
 - Isolated environments for untrusted or destructive operations
 - Kubernetes (k3s) clusters for testing
 - GPU/PCI passthrough workloads (via cloud-hypervisor backend)
+- Automated code review pipelines in ephemeral microVMs
+- Running coding agents in isolated microVMs (Amp, Claude Code, Codex, OpenCode, GitHub Copilot CLI) then copying out the outcome - code, files, reports, binaries, images, etc.
 
 VMs boot in 1–3 seconds, have full systemd, internet access, and SSH pre-installed.
 
@@ -464,24 +466,29 @@ slicer vm logs VM_NAME        # Boot/console log (--lines N)
 
 ## Agent Sandboxes (Coding Agents in VMs)
 
-Launch coding agents (Amp, Claude Code, Codex) inside isolated VMs with one command:
+Slicer can provision a fresh microVM, sync your workspace into it, and optionally launch a coding agent in one command.
 
 ```bash
+slicer workspace [./path]       # Plain workspace + interactive shell (no agent)
 slicer amp [./path]             # Amp sandbox
 slicer claude [./path]          # Claude Code sandbox
 slicer codex [./path]           # Codex sandbox
-slicer workspace [./path]       # Plain workspace, no agent
+slicer opencode [./path]        # OpenCode sandbox
+slicer copilot [./path]         # GitHub Copilot CLI sandbox
 ```
 
-These commands:
-1. Create a fresh microVM
-2. Copy credentials and workspace into the VM
-3. Install the agent tool
-4. Attach you to the session (via tmux or direct)
+How they behave (based on the CLI help text):
+- If the argument is a **local directory** (or omitted, defaulting to `.`), Slicer will create a new VM, wait for the guest agent, and copy your workspace into the VM.
+- If the argument is **not** a local path, it is treated as a **VM name** and Slicer will reattach to that existing VM.
+
+What each command does:
+- **`slicer workspace`**: syncs your project into a clean VM and opens a shell. No coding agent is installed/launched.
+- **`slicer amp/claude/codex/opencode/copilot`**: syncs your project, copies that tool's auth/config files into the VM, installs the agent via `arkade`, then attaches you to an agent session.
 
 Reattach to an existing VM by name: `slicer amp amp-1`
 
-Session modes: `--tmux local` (default), `--tmux remote`, `--tmux none`.
+Session modes (for the agent sandboxes): `--tmux none`, `--tmux local`, `--tmux remote`.
+Default differs per command; check `slicer <agent> --help` if you need to be exact for the user's setup.
 
 Use `.slicerignore` at workspace root to exclude files (same syntax as `.gitignore`).
 
