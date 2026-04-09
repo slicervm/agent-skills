@@ -351,10 +351,10 @@ It opens an interactive PTY, so it is not suited to non-interactive stdin pipeli
 ### Copy files to/from VMs
 
 ```bash
-# Single file (tar mode is the default; binary mode is available via --mode=binary)
+# Single file (no `-r` needed)
 slicer vm cp ./local-file.txt VM_NAME:/tmp/file.txt --uid 1000
 
-# Single file from VM (tar mode works for files too)
+# Single file from VM
 slicer vm cp VM_NAME:/etc/os-release ./os-release.txt
 
 # Single file with custom permissions (binary mode only)
@@ -373,7 +373,7 @@ Key flags:
 
 | Flag | Purpose |
 |------|---------|
-| (default) | Tar mode — streams via tar unless binary mode is specified (`--mode` defaults to `tar`) |
+| (no `-r`) | Copy single files (common/default usage) |
 | `-r` / `--recursive` | Copy recursively using tar mode. Shortcut for `--mode=tar`. |
 | `--mode=binary` | Binary mode — supports files (not folders) and enables `--permissions` |
 | `--mode=binary --permissions 0755` | Binary mode with custom file permissions |
