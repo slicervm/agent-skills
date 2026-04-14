@@ -14,6 +14,12 @@ Comprehensive skill covering the full Slicer workflow — connecting to daemons 
 
 Works from macOS (via slicer-mac) and Linux hosts.
 
+### use-s3-rustfs
+
+`skills/use-s3-rustfs`
+
+Install and run [RustFS](https://rustfs.com) (S3-compatible object storage in Rust) inside a Slicer VM, and talk to it from boto3, aws-cli, or `mc`. Covers the non-interactive installer invocation, default credentials/ports, and common client pitfalls (path-style vs virtual-host, SigV4 region quirks).
+
 ### use-k3sup
 
 `skills/use-k3sup`
