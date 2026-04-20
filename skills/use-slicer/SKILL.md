@@ -47,8 +47,9 @@ For agent tasks that can create infrastructure, use this default pattern:
 1. Reuse the session VM when already known (for example, because the same workflow tagged VM was created earlier in this run). Otherwise create a new VM and tag it.
 2. Track and pass the session VM name forward (instead of switching to an arbitrary existing VM) so subsequent commands in the same session stay on the same instance.
 3. Tag VMs so they are identifiable later, for example `workflow=<slug>`.
-4. Run in-VM commands with native `slicer vm` operations (`exec`, `cp`, `shell`).
+4. Run in-VM commands with native `slicer vm` operations (`exec`, `bg exec`, `cp`, `shell`).
    - Use `slicer vm exec` for short, atomic commands.
+   - Use `slicer vm bg exec` for long-running processes (dev servers, builds) that should survive client disconnect — check back with `bg logs`, `bg wait`, and clean up with `bg kill` + `bg remove`.
    - Use `slicer vm shell` for long sessions or multiple related commands (interactive PTY).
 5. Prefer native Slicer commands over SSH even when SSH is available.
 
@@ -214,6 +215,7 @@ Slicer exposes a few **top-level shortcuts** for common VM operations (not for e
 - `slicer ls` is a shortcut for `slicer vm list` (and `slicer vm list` itself has aliases `ls`/`l`)
 - `slicer shell` is a shortcut for `slicer vm shell`
 - `slicer cp` is a shortcut for `slicer vm cp`
+- `slicer bg` is a shortcut for `slicer vm bg` (so `slicer bg exec`, `slicer bg logs`, etc. all work)
 
 The `slicer vm` command group itself also has aliases: `slicer vm` == `slicer v`.
 
@@ -235,6 +237,8 @@ Use `--json` for machine-readable output.
 ```bash
 slicer vm add HOSTGROUP --url "$SLICER_URL" --token-file "$SLICER_TOKEN_FILE"
 ```
+
+The hostgroup argument is optional when only one host group is configured — the SDK resolves it automatically. When there are multiple host groups you must specify one explicitly.
 
 If SSH access is needed, configure key material at launch time:
 - for local keys: pass a real public key string via `--ssh-key`
@@ -316,11 +320,16 @@ slicer vm health VM_NAME --json    # Agent version, uptime, stats — does not b
 
 ## Running Commands
 
-### Execute a command
+### Execute a command (foreground)
 
 ```bash
 slicer vm exec VM_NAME -- "whoami"
 ```
+
+`slicer vm exec` blocks until the command exits and streams stdout/stderr inline.
+For long-running processes that should survive client disconnect (dev servers,
+multi-minute builds, agent-driven workflows), use `slicer vm bg exec` instead —
+see [Background Exec](#background-exec-long-running-processes) below.
 
 By default, `slicer vm exec` executes the command through a shell, so use direct command strings.
 For plain exec with no shell interpretation, use `--shell ""`.
@@ -373,6 +382,142 @@ Flags (from `slicer vm shell --help`): `--uid`, `--cwd`, `--shell`, `--bootstrap
 
 Use `slicer vm shell` for longer interactive work; keep `slicer vm exec` for bounded command calls.
 It opens an interactive PTY, so it is not suited to non-interactive stdin pipelines.
+
+### Background Exec (long-running processes)
+
+Use `slicer vm bg exec` (aliases: `run`, `start`) when the command should
+survive client disconnect — dev servers, multi-minute builds, agent-driven
+test runs, or any process you want to fire-and-forget and check back later.
+Do **not** background foreground exec with `slicer vm exec ... &` — that ties
+the child's lifetime to the local shell and you cannot reconnect to its output.
+
+**Three command forms** — pick whichever fits:
+
+```bash
+# 1. Positional (humans — your shell tokenizes the args after --)
+slicer vm bg exec VM_NAME --uid 1000 -- npm run dev
+
+# 2. Explicit (agents/scripts — deterministic, no shell-quoting worries)
+slicer vm bg exec VM_NAME --uid 1000 --cmd npm --arg run --arg dev
+slicer vm bg exec VM_NAME --uid 1000 -c npm -a run -a dev          # short form
+
+# 3. Shell (opt-in for $VAR expansion, globs, ||, && etc.)
+slicer vm bg exec VM_NAME --uid 1000 --shell=/bin/bash -- "cd /app && exec npm run dev"
+```
+
+**Important difference from `vm exec`:** `bg exec` defaults to **direct exec** (no shell).
+`vm exec` defaults `--shell` to `/bin/bash`. This means:
+- Positional form: pass the binary and args as separate tokens after `--`.
+  `-- npm run dev` ✓ (three tokens). `-- "npm run dev"` ✗ (single token treated as binary name — will error).
+- If you need shell features ($VAR, pipes, globs, `&&`), use `--shell=/bin/bash`.
+  For daemon-style processes, prefix with `exec` so the shell replaces itself and the
+  tracked PID is the actual process: `--shell=/bin/bash -- "cd /app && exec ./server"`.
+- The explicit form (`--cmd`/`--arg`) always direct-execs with no shell, giving clean PID hygiene.
+  It is mutually exclusive with `--shell` and positional args.
+
+```bash
+# Launch and follow output inline until the process exits
+slicer vm bg exec VM_NAME --uid 1000 --follow -- docker build -t me/img:1 .
+```
+
+Capture the exec_id for later use:
+
+```bash
+EX=$(slicer vm bg exec VM_NAME --uid 1000 --cwd /home/ubuntu/app \
+     -- npm run dev \
+     | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
+```
+
+Manage background execs with the `slicer vm bg` subcommands:
+
+```bash
+slicer vm bg list   VM_NAME                             # table of running + exited-not-reaped
+slicer vm bg info   VM_NAME "$EX"                       # JSON status of one exec
+slicer vm bg logs   VM_NAME "$EX"                       # dump current ring buffer contents
+slicer vm bg logs   VM_NAME "$EX" --follow              # stream live until exit
+slicer vm bg logs   VM_NAME "$EX" --follow --from-id N  # resume from frame N after disconnect
+slicer vm bg wait   VM_NAME "$EX" --timeout 10m         # block until exit (exit code follows child)
+slicer vm bg kill   VM_NAME "$EX"                       # SIGTERM (escalates to SIGKILL after 5s)
+slicer vm bg kill   VM_NAME "$EX" --signal KILL         # force stop immediately
+slicer vm bg remove VM_NAME "$EX"                       # free ring buffer + registry entry
+```
+
+Key flags for `slicer vm bg exec`:
+
+| Flag | Purpose |
+|------|---------|
+| `--uid` | User ID (default: auto-detect non-root) |
+| `--gid` | Group ID (default: auto-detect non-root) |
+| `--cwd` | Working directory (default: user home) |
+| `--env KEY=VALUE` | Environment variable (repeatable) |
+| `--shell`, `-s` | Shell interpreter (default: empty = direct exec). Set to `/bin/bash` for `$VAR` expansion, globs, pipes. Use `exec` in the shell string for clean PID. |
+| `--cmd`, `-c` | Binary to exec (explicit form, mutex with positional and `--shell`) |
+| `--arg`, `-a` | Argument to pass to `--cmd` (repeatable, order-preserving) |
+| `--ring-bytes 4M` | Per-process ring buffer cap (default 1M) |
+| `--follow` | Stream logs after launch until exit |
+| `--json` | Emit JSON output (for scripting) |
+
+**How the ring buffer works:**
+
+- Stdout + stderr are captured into a per-process ring buffer (default 1 MiB, ~10 000 lines of typical terminal output).
+- Bump with `--ring-bytes 4M` or larger for verbose builds (e.g. `docker buildx`).
+- When the buffer is full, oldest frames are evicted. Readers that reconnect after eviction see a `type=gap` frame summarising what was lost before output continues from the oldest available frame.
+- The buffer lives until explicit `slicer vm bg remove`. After reap, any info/logs/kill/wait calls return `410 Gone`.
+- Agent-wide cap: 256 MiB across all background execs. Exceeding it returns `503` on the next launch.
+
+**Important notes:**
+
+- **Command parsing:** in positional form, pass the executable and its arguments as separate tokens after `--`. Do NOT quote them together. `-- npm run dev` is correct; `-- "npm run dev"` is wrong (the CLI will error with a hint showing the three valid forms). In explicit form (`--cmd`/`--arg`), quoting is irrelevant — each flag is one token. If the binary is not on the default `$PATH`, use the full path: `-- /usr/local/bin/nats-server -p 4222`.
+- Detached at launch — the child is a session leader. Killing the `slicer` CLI does not kill the child.
+- `--follow --from-id N` resumes after disconnect. Always record the last frame id you observed.
+- Callers that launch many execs and never reap them grow agent memory. Always `vm bg remove` when done.
+- v1 scope: if the guest agent exits, its registry of background execs is lost and the children die with it. Fine for CI-style jobs and dev servers; not for daemonised services across reboots.
+
+**When to use `vm bg exec` vs `vm exec`:**
+
+- `vm exec`: command completes in seconds, you want output inline.
+- `vm bg exec`: command runs longer than a connection you're willing to babysit, or you need to detach and reattach.
+
+#### Example: dev server with port forward
+
+```bash
+VM_NAME=dev-1
+
+# Start the dev server in background (explicit form — preferred for agents)
+EX=$(slicer vm bg exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu/app \
+     -c npm -a run -a dev \
+     | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
+
+# Port-forward to access it from the host
+slicer vm forward "$VM_NAME" -L 3000:127.0.0.1:3000 &
+
+# Check logs later
+slicer vm bg logs "$VM_NAME" "$EX" --follow
+
+# When done, stop and clean up
+slicer vm bg kill "$VM_NAME" "$EX"
+slicer vm bg remove "$VM_NAME" "$EX"
+```
+
+#### Example: long-running build
+
+```bash
+VM_NAME=build-1
+
+# Launch build, follow output until it exits (CLI exit code = child exit code)
+slicer vm bg exec "$VM_NAME" --uid 1000 --ring-bytes 4M --follow \
+  -- docker build -t myapp:latest .
+
+# Or launch detached and wait for it
+EX=$(slicer vm bg exec "$VM_NAME" --uid 1000 --ring-bytes 4M \
+     -- make build-all \
+     | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
+
+# Do other work, then check back
+slicer vm bg wait "$VM_NAME" "$EX" --timeout 30m
+slicer vm bg logs "$VM_NAME" "$EX"       # dump final output
+slicer vm bg remove "$VM_NAME" "$EX"     # reap
+```
 
 ---
 
@@ -581,7 +726,7 @@ For Kubernetes bootstrap workflows, prefer pulling toolchain CLIs via `arkade` (
 
 Do not start cluster accessibility flows (such as `kubectl port-forward`) inside `userdata`. Use `userdata` only for setup/bootstrap tasks, then use `slicer vm forward` from the host after VM readiness for host access.
 
-Also avoid any blocking call inside `userdata`; keep it non-interactive and short-lived. Port-forwarding, shell sessions, and long-running daemons should be started after VM boot.
+Also avoid any blocking call inside `userdata`; keep it non-interactive and short-lived. Port-forwarding, shell sessions, and long-running daemons should be started after VM boot (use `slicer vm bg exec` for processes that need to survive client disconnect).
 
 ### Database testing
 
@@ -811,5 +956,5 @@ slicer activate         # Legacy command for GitHub Sponsors and for trial users
 | Connection refused | Slicer daemon not running — start with `sudo -E slicer up config.yaml` |
 | Permission denied | Use `sudo` for unix socket access, or verify `--token-file`/`--token` and local TCP credentials |
 | VM not responding | `slicer vm ready VM_NAME --timeout 60s` |
-| Command hangs | Background processes in exec can hang — use `nohup ... &` |
+| Command hangs | Long-running processes block `vm exec` — use `slicer vm bg exec` instead |
 | Stale state | Delete `.img` and `.lock` files to reset persistent disks |
