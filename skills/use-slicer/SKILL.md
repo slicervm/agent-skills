@@ -385,42 +385,29 @@ It opens an interactive PTY, so it is not suited to non-interactive stdin pipeli
 
 ### Background Exec (long-running processes)
 
-Use `slicer vm bg exec` (aliases: `run`, `start`) when the command should
-survive client disconnect — dev servers, multi-minute builds, agent-driven
-test runs, or any process you want to fire-and-forget and check back later.
-Do **not** background foreground exec with `slicer vm exec ... &` — that ties
-the child's lifetime to the local shell and you cannot reconnect to its output.
+Use `slicer vm bg exec` when the command should survive client disconnect — dev servers, builds, test runs.
+Do **not** use `slicer vm exec ... &` — that ties the child to the local shell and you can't reconnect.
 
-**Three command forms** — pick whichever fits:
+**Critical difference from `vm exec`:** `bg exec` defaults to **direct exec** (no shell).
+`vm exec` defaults to `/bin/bash`. This means:
+- Positional: pass binary + args as separate tokens. `-- npm run dev` ✓. `-- "npm run dev"` ✗ (error).
+- Shell features needed? Use `--shell=/bin/bash`. For daemons, prefix with `exec`: `--shell=/bin/bash -- "cd /app && exec ./server"`.
+- Explicit form (`-c`/`-a`): always direct-exec, no quoting issues, mutex with `--shell` and positional.
+
+**Three command forms:**
 
 ```bash
-# 1. Positional (humans — your shell tokenizes the args after --)
+# 1. Positional — separate tokens after --
 slicer vm bg exec VM_NAME --uid 1000 -- npm run dev
 
-# 2. Explicit (agents/scripts — deterministic, no shell-quoting worries)
-slicer vm bg exec VM_NAME --uid 1000 --cmd npm --arg run --arg dev
-slicer vm bg exec VM_NAME --uid 1000 -c npm -a run -a dev          # short form
+# 2. Explicit — preferred for agents
+slicer vm bg exec VM_NAME --uid 1000 -c npm -a run -a dev
 
-# 3. Shell (opt-in for $VAR expansion, globs, ||, && etc.)
+# 3. Shell — opt-in for $VAR, pipes, &&
 slicer vm bg exec VM_NAME --uid 1000 --shell=/bin/bash -- "cd /app && exec npm run dev"
 ```
 
-**Important difference from `vm exec`:** `bg exec` defaults to **direct exec** (no shell).
-`vm exec` defaults `--shell` to `/bin/bash`. This means:
-- Positional form: pass the binary and args as separate tokens after `--`.
-  `-- npm run dev` ✓ (three tokens). `-- "npm run dev"` ✗ (single token treated as binary name — will error).
-- If you need shell features ($VAR, pipes, globs, `&&`), use `--shell=/bin/bash`.
-  For daemon-style processes, prefix with `exec` so the shell replaces itself and the
-  tracked PID is the actual process: `--shell=/bin/bash -- "cd /app && exec ./server"`.
-- The explicit form (`--cmd`/`--arg`) always direct-execs with no shell, giving clean PID hygiene.
-  It is mutually exclusive with `--shell` and positional args.
-
-```bash
-# Launch and follow output inline until the process exits
-slicer vm bg exec VM_NAME --uid 1000 --follow -- docker build -t me/img:1 .
-```
-
-Capture the exec_id for later use:
+**Capture exec_id** for later management:
 
 ```bash
 EX=$(slicer vm bg exec VM_NAME --uid 1000 --cwd /home/ubuntu/app \
@@ -428,96 +415,20 @@ EX=$(slicer vm bg exec VM_NAME --uid 1000 --cwd /home/ubuntu/app \
      | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
 ```
 
-Manage background execs with the `slicer vm bg` subcommands:
+**Management subcommands:**
 
 ```bash
-slicer vm bg list   VM_NAME                             # table of running + exited-not-reaped
-slicer vm bg info   VM_NAME "$EX"                       # JSON status of one exec
-slicer vm bg logs   VM_NAME "$EX"                       # dump current ring buffer contents
-slicer vm bg logs   VM_NAME "$EX" --follow              # stream live until exit
-slicer vm bg logs   VM_NAME "$EX" --follow --from-id N  # resume from frame N after disconnect
-slicer vm bg wait   VM_NAME "$EX" --timeout 10m         # block until exit (exit code follows child)
-slicer vm bg kill   VM_NAME "$EX"                       # SIGTERM (escalates to SIGKILL after 5s)
-slicer vm bg kill   VM_NAME "$EX" --signal KILL         # force stop immediately
-slicer vm bg remove VM_NAME "$EX"                       # free ring buffer + registry entry
+slicer vm bg list   VM_NAME                     # list running + exited
+slicer vm bg info   VM_NAME "$EX"               # JSON status of one exec
+slicer vm bg logs   VM_NAME "$EX"               # dump ring buffer (--follow to stream)
+slicer vm bg wait   VM_NAME "$EX" --timeout 10m # block until exit
+slicer vm bg kill   VM_NAME "$EX"               # SIGTERM (→ SIGKILL after 5s)
+slicer vm bg remove VM_NAME "$EX"               # free buffer — always do when done
 ```
 
-Key flags for `slicer vm bg exec`:
+Key flags: `--uid`, `--cwd`, `--env KEY=VALUE`, `--ring-bytes 4M` (buffer cap, default 1M), `--follow`, `--json`. If binary not on `$PATH`, use full path: `-- /usr/local/bin/nats-server -p 4222`.
 
-| Flag | Purpose |
-|------|---------|
-| `--uid` | User ID (default: auto-detect non-root) |
-| `--gid` | Group ID (default: auto-detect non-root) |
-| `--cwd` | Working directory (default: user home) |
-| `--env KEY=VALUE` | Environment variable (repeatable) |
-| `--shell`, `-s` | Shell interpreter (default: empty = direct exec). Set to `/bin/bash` for `$VAR` expansion, globs, pipes. Use `exec` in the shell string for clean PID. |
-| `--cmd`, `-c` | Binary to exec (explicit form, mutex with positional and `--shell`) |
-| `--arg`, `-a` | Argument to pass to `--cmd` (repeatable, order-preserving) |
-| `--ring-bytes 4M` | Per-process ring buffer cap (default 1M) |
-| `--follow` | Stream logs after launch until exit |
-| `--json` | Emit JSON output (for scripting) |
-
-**How the ring buffer works:**
-
-- Stdout + stderr are captured into a per-process ring buffer (default 1 MiB, ~10 000 lines of typical terminal output).
-- Bump with `--ring-bytes 4M` or larger for verbose builds (e.g. `docker buildx`).
-- When the buffer is full, oldest frames are evicted. Readers that reconnect after eviction see a `type=gap` frame summarising what was lost before output continues from the oldest available frame.
-- The buffer lives until explicit `slicer vm bg remove`. After reap, any info/logs/kill/wait calls return `410 Gone`.
-- Agent-wide cap: 256 MiB across all background execs. Exceeding it returns `503` on the next launch.
-
-**Important notes:**
-
-- **Command parsing:** in positional form, pass the executable and its arguments as separate tokens after `--`. Do NOT quote them together. `-- npm run dev` is correct; `-- "npm run dev"` is wrong (the CLI will error with a hint showing the three valid forms). In explicit form (`--cmd`/`--arg`), quoting is irrelevant — each flag is one token. If the binary is not on the default `$PATH`, use the full path: `-- /usr/local/bin/nats-server -p 4222`.
-- Detached at launch — the child is a session leader. Killing the `slicer` CLI does not kill the child.
-- `--follow --from-id N` resumes after disconnect. Always record the last frame id you observed.
-- Callers that launch many execs and never reap them grow agent memory. Always `vm bg remove` when done.
-- v1 scope: if the guest agent exits, its registry of background execs is lost and the children die with it. Fine for CI-style jobs and dev servers; not for daemonised services across reboots.
-
-**When to use `vm bg exec` vs `vm exec`:**
-
-- `vm exec`: command completes in seconds, you want output inline.
-- `vm bg exec`: command runs longer than a connection you're willing to babysit, or you need to detach and reattach.
-
-#### Example: dev server with port forward
-
-```bash
-VM_NAME=dev-1
-
-# Start the dev server in background (explicit form — preferred for agents)
-EX=$(slicer vm bg exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu/app \
-     -c npm -a run -a dev \
-     | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
-
-# Port-forward to access it from the host
-slicer vm forward "$VM_NAME" -L 3000:127.0.0.1:3000 &
-
-# Check logs later
-slicer vm bg logs "$VM_NAME" "$EX" --follow
-
-# When done, stop and clean up
-slicer vm bg kill "$VM_NAME" "$EX"
-slicer vm bg remove "$VM_NAME" "$EX"
-```
-
-#### Example: long-running build
-
-```bash
-VM_NAME=build-1
-
-# Launch build, follow output until it exits (CLI exit code = child exit code)
-slicer vm bg exec "$VM_NAME" --uid 1000 --ring-bytes 4M --follow \
-  -- docker build -t myapp:latest .
-
-# Or launch detached and wait for it
-EX=$(slicer vm bg exec "$VM_NAME" --uid 1000 --ring-bytes 4M \
-     -- make build-all \
-     | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
-
-# Do other work, then check back
-slicer vm bg wait "$VM_NAME" "$EX" --timeout 30m
-slicer vm bg logs "$VM_NAME" "$EX"       # dump final output
-slicer vm bg remove "$VM_NAME" "$EX"     # reap
-```
+See [references/bg-exec.md](references/bg-exec.md) for the full flag table, ring buffer details, and worked examples.
 
 ---
 
