@@ -1,7 +1,8 @@
 ---
 name: use-slicer
 description: Use Slicer to launch Linux microVMs for sandboxed builds, E2E tests, Docker, CI, and isolated dev environments — works from macOS and Linux hosts
-tools: [Bash]
+license: MIT
+compatibility: Requires Bash, the Slicer CLI, and access to a running Slicer daemon or slicer-mac.
 ---
 
 # Use Slicer — Launch Linux MicroVMs
