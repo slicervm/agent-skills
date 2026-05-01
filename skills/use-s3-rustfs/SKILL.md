@@ -84,8 +84,13 @@ Change keys before anything touches real data:
 
 ```bash
 slicer vm exec "$VM_NAME" --uid 1000 -- \
-  "sudo sed -i 's/=rustfsadmin/=$(openssl rand -hex 16)/' /etc/default/rustfs && \
-   sudo systemctl restart rustfs"
+  'access_key=$(openssl rand -hex 16) &&
+   secret_key=$(openssl rand -hex 32) &&
+   sudo sed -i \
+     -e "s/^RUSTFS_ACCESS_KEY=.*/RUSTFS_ACCESS_KEY=${access_key}/" \
+     -e "s/^RUSTFS_SECRET_KEY=.*/RUSTFS_SECRET_KEY=${secret_key}/" \
+     /etc/default/rustfs &&
+   sudo systemctl restart rustfs'
 ```
 
 Service management:
@@ -123,12 +128,13 @@ Notes for S3 clients:
 
 - Always pass `endpoint_url` — without it boto3 hits real AWS.
 - `region_name` is required by the SigV4 signer, but RustFS ignores the value.
-- Use **path-style** addressing for CLI tools (`--endpoint-url ... --addressing-style path`) — virtual-host style requires DNS for every bucket.
+- Use **path-style** addressing for CLI tools — virtual-host style requires DNS for every bucket.
 - No HTTPS by default. For TLS, terminate in front (nginx/caddy) or configure RustFS's TLS options.
 
 ### aws-cli
 
 ```bash
+aws configure set default.s3.addressing_style path
 aws --endpoint-url http://127.0.0.1:9000 \
     --no-verify-ssl s3 mb s3://demo
 aws --endpoint-url http://127.0.0.1:9000 \
