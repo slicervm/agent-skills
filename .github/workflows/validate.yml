@@ -71,4 +71,9 @@ jobs:
             failed=1
           fi
 
+          if grep -R --line-number -E '\]\([^)]+\.md\)' skills/*/references; then
+            echo "::error::references should not link to other markdown files; keep file references one level deep from SKILL.md"
+            failed=1
+          fi
+
           exit "$failed"

@@ -67,7 +67,7 @@ On slicer-mac, always launch API-created microVMs with explicit `sbox` host grou
 slicer vm add sbox --tag workflow=<slug>
 ```
 
-Socket: `~/slicer-mac/slicer.sock`. Auth: off by default. See [workflows-and-admin.md](workflows-and-admin.md) for more slicer-mac examples.
+Socket: `~/slicer-mac/slicer.sock`. Auth: off by default.
 
 ### Option B: Slicer Box — hosted at box.slicervm.com
 

@@ -218,7 +218,7 @@ slicer vm bg remove VM_NAME "$EX"               # free buffer — always do when
 
 Key flags: `--uid`, `--cwd`, `--env KEY=VALUE`, `--ring-bytes 4M` (buffer cap, default 1M), `--follow`, `--json`. If binary not on `$PATH`, use full path: `-- /usr/local/bin/nats-server -p 4222`.
 
-See [bg-exec.md](bg-exec.md) for the full flag table, ring buffer details, and worked examples.
+For full background-exec details, load `references/bg-exec.md` from the main skill index.
 
 ---
 
@@ -312,7 +312,7 @@ slicer vm forward VM_NAME -L 8080:127.0.0.1:8080 -L 5432:127.0.0.1:5432
 
 Port forwards run in the foreground — use `&` to background them.
 
-See [networking.md](networking.md) for bridge vs isolated networking.
+For bridge vs isolated networking details, load `references/networking.md` from the main skill index.
 
 ---
 

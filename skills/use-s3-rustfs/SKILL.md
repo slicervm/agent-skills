@@ -1,6 +1,6 @@
 ---
 name: use-s3-rustfs
-description: Install and run RustFS (S3-compatible object storage in Rust) in a Slicer VM, and talk to it with any S3 client (boto3, aws-cli, mc)
+description: Install and run RustFS, an S3-compatible object store, in a Slicer VM. Use when tests, CI, boto3, aws-cli, mc, or Terraform need a local S3 endpoint.
 license: MIT
 compatibility: Requires Bash, the Slicer CLI, a running Slicer daemon, and network access to install RustFS.
 ---
