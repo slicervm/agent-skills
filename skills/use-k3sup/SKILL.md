@@ -1,7 +1,8 @@
 ---
 name: use-k3sup
-description: Provision K3s clusters with k3sup and k3sup-pro on local, Slicer, and remote VMs.
-tools: [Bash]
+description: Provision K3s clusters with k3sup and k3sup-pro. Use when installing Kubernetes, creating single-node or HA k3s clusters, or wiring Slicer/remote VMs over SSH.
+license: MIT
+compatibility: Requires Bash and network access for installing k3sup/kubectl; Slicer VM workflows require the Slicer CLI and a running daemon.
 ---
 
 # Use K3sup with Slicer VMs

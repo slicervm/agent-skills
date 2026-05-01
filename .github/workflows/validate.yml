@@ -1,0 +1,79 @@
+name: Validate skills
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@latest
+
+      - name: Validate Claude Code plugin marketplace
+        run: claude plugin validate .
+
+      - name: Validate Agent Skills metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          failed=0
+
+          while IFS= read -r -d '' skill; do
+            dir_name="$(basename "$(dirname "$skill")")"
+            name="$(awk '/^name: / { sub(/^name: /, ""); print; exit }' "$skill")"
+            description="$(awk '/^description: / { sub(/^description: /, ""); print; exit }' "$skill")"
+            line_count="$(wc -l < "$skill")"
+
+            if [[ -z "$name" ]]; then
+              echo "::error file=$skill::missing required name field"
+              failed=1
+            elif [[ "$name" != "$dir_name" ]]; then
+              echo "::error file=$skill::name '$name' must match directory '$dir_name'"
+              failed=1
+            elif [[ ! "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+              echo "::error file=$skill::name must be kebab-case lowercase alphanumeric"
+              failed=1
+            elif (( ${#name} > 64 )); then
+              echo "::error file=$skill::name exceeds 64 characters"
+              failed=1
+            fi
+
+            if [[ -z "$description" ]]; then
+              echo "::error file=$skill::missing required description field"
+              failed=1
+            elif (( ${#description} > 1024 )); then
+              echo "::error file=$skill::description exceeds 1024 characters"
+              failed=1
+            fi
+
+            if (( line_count > 500 )); then
+              echo "::error file=$skill::main SKILL.md should stay under 500 lines; move details to references/"
+              failed=1
+            fi
+          done < <(find skills -mindepth 2 -maxdepth 2 -name SKILL.md -print0)
+
+          if grep -R --line-number '^tools:' skills; then
+            echo "::error::legacy tools: frontmatter is not part of the current Agent Skills spec; use compatibility text or allowed-tools only when intentionally pre-approving tools"
+            failed=1
+          fi
+
+          if grep -R --line-number -E '\]\([^)]+\.md\)' skills/*/references; then
+            echo "::error::references should not link to other markdown files; keep file references one level deep from SKILL.md"
+            failed=1
+          fi
+
+          exit "$failed"
