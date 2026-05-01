@@ -1,14 +1,16 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
   "name": "slicer",
+  "description": "SlicerVM skills for Claude Code: Linux microVM workflows, RustFS S3-compatible storage, and k3sup Kubernetes provisioning.",
   "owner": {
     "name": "SlicerVM"
   },
   "plugins": [
     {
       "name": "use-slicer",
-      "source": "./skills/use-slicer",
+      "source": "./",
+      "skills": ["./skills/use-slicer"],
       "description": "Use Slicer to launch Linux microVMs for sandboxed builds, E2E tests, Docker, CI, and isolated dev environments — works from macOS and Linux hosts",
-      "version": "1.0.0",
       "author": {
         "name": "SlicerVM"
       },
@@ -20,9 +22,9 @@
     },
     {
       "name": "use-k3sup",
-      "source": "./skills/use-k3sup",
+      "source": "./",
+      "skills": ["./skills/use-k3sup"],
       "description": "Provision K3s clusters with k3sup (single-node and k3sup-pro HA) on local, Slicer, and remote VMs.",
-      "version": "1.0.0",
       "author": {
         "name": "SlicerVM"
       },
@@ -30,6 +32,20 @@
       "repository": "https://github.com/slicervm/agent-skills",
       "license": "MIT",
       "keywords": ["k3s", "kubernetes", "k3sup", "k3sup-pro", "slicer", "vm"],
+      "strict": false
+    },
+    {
+      "name": "use-s3-rustfs",
+      "source": "./",
+      "skills": ["./skills/use-s3-rustfs"],
+      "description": "Install and run RustFS, an S3-compatible object storage server, inside a Slicer VM and use it with boto3, aws-cli, or mc.",
+      "author": {
+        "name": "SlicerVM"
+      },
+      "homepage": "https://github.com/slicervm/agent-skills",
+      "repository": "https://github.com/slicervm/agent-skills",
+      "license": "MIT",
+      "keywords": ["s3", "rustfs", "object-storage", "slicer", "vm", "boto3", "aws-cli"],
       "strict": false
     }
   ]

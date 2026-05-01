@@ -37,14 +37,19 @@ Single-node and HA K3s provisioning with `k3sup` / `k3sup-pro`, using either:
 npx skills add slicervm/agent-skills
 ```
 
-This installs the skill into whichever AI coding agents you have (Claude Code, Amp, Cursor, Codex, Gemini CLI, etc.).
+This installs the skills into whichever AI coding agents you have (Claude Code, Amp, Cursor, Codex, Gemini CLI, etc.).
 
 ### Claude Code Plugin
 
 ```bash
 /plugin marketplace add slicervm/agent-skills
 /plugin install use-slicer@slicer
+/plugin install use-s3-rustfs@slicer
+/plugin install use-k3sup@slicer
 ```
+
+Install only the plugin skills you need; `use-s3-rustfs` assumes `use-slicer` is also installed.
+Claude Code exposes plugin skills under their plugin namespace, for example `/use-slicer:use-slicer`.
 
 ### Manual
 
