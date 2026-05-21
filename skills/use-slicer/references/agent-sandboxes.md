@@ -1,38 +1,55 @@
 # Agent Sandbox Reference
 
-Slicer has built-in commands to launch coding agents inside isolated microVMs. Each command creates a VM, copies credentials + workspace, installs the agent, and attaches a session.
+Slicer has built-in commands to launch coding agents inside isolated microVMs. Each command creates a VM, installs the agent and its credentials, and — depending on the argument — optionally syncs a workspace and attaches a session.
 
 ## Commands
 
 | Command | Agent | Tags |
 |---------|-------|------|
-| `slicer amp [path]` | Amp | `agent`, `amp` |
-| `slicer claude [path]` | Claude Code | `agent`, `claude` |
-| `slicer codex [path]` | Codex | `agent`, `codex` |
-| `slicer workspace [path]` | None (clean shell) | `workspace` |
+| `slicer amp [path\|vm]` | Amp | `agent`, `amp` |
+| `slicer claude [path\|vm]` | Claude Code | `agent`, `claude` |
+| `slicer codex [path\|vm]` | Codex | `agent`, `codex` |
+| `slicer copilot [path\|vm]` | GitHub Copilot CLI | `agent`, `copilot` |
+| `slicer opencode [path\|vm]` | OpenCode | `agent`, `opencode` |
+| `slicer workspace [path\|vm]` | None (clean shell) | `workspace` |
+
+## Three ways to run
+
+The single optional positional argument selects the mode:
+
+| Argument | Mode | Behaviour |
+|----------|------|-----------|
+| *(none)* | provision-only | Create VM, sync git identity, copy credentials, install the agent — then stop. No workspace copy, no attach. |
+| a local directory | workspace | As above, then copy the directory in (honours `.slicerignore`) and attach a session. |
+| anything else | reattach | Treat as an existing VM name; wait for the agent and reattach. |
+
+**Provision-only** (`slicer codex` with no argument) is the clean-VM mode. It does **not** copy the current directory — pass `.` explicitly for that. Provision-only VMs carry no workspace (`wd=`) tag. Get code into them with `slicer wt push` — see [Worktree workflow](#worktree-workflow-recommended-for-git-repos).
 
 ## What happens on launch
 
 1. Host group is selected (auto if only one, or `--hostgroup NAME`)
 2. Fresh microVM is created
 3. Waits for guest agent readiness
-4. Credentials are copied into the VM:
+4. Your git identity (`user.name` / `user.email`) and safe git preferences are synced in — never credentials or url rewrites
+5. Agent credentials are copied into the VM:
    - **Amp**: `~/.local/share/amp/secrets.json`, `~/.config/amp/settings.json`
    - **Claude**: `~/.claude/.credentials.json`, `~/.claude/settings.json`, `~/.claude.json`
    - **Codex**: `~/.codex/auth.json`, `~/.codex/config.toml`
-5. Workspace directory is copied (honouring `.slicerignore`)
-6. Agent is installed via arkade
-7. Session is attached
+   - **Copilot**: `~/.config/github-copilot/apps.json`, `~/.copilot/config.json`
+   - **OpenCode**: `~/.local/share/opencode/auth.json`, `~/.config/opencode/opencode.json`
+6. *(workspace mode only)* the workspace directory is copied in and ownership fixed
+7. The agent is installed via arkade
+8. *(workspace / reattach modes)* a session is attached; *(provision-only)* a hint is printed and the command exits
 
 ## Session modes (`--tmux`)
 
 | Mode | Description |
 |------|-------------|
-| `local` (default) | tmux on the host, two panes connecting to VM via `slicer vm shell` |
+| `none` (default) | Direct exec, no tmux |
+| `local` | tmux on the host, two panes connecting to the VM via `slicer vm shell` |
 | `remote` | tmux inside the VM, attached via `vm shell` |
-| `none` | Direct exec, no tmux |
 
-## Reattach to existing VM
+## Reattach to an existing VM
 
 Pass the VM name instead of a path:
 
@@ -40,12 +57,47 @@ Pass the VM name instead of a path:
 slicer amp amp-1
 slicer claude claude-1
 slicer codex codex-1
+slicer copilot copilot-1
+slicer opencode opencode-1
 slicer workspace workspace-1
 ```
 
+## Worktree workflow (recommended for git repos)
+
+For a git project, prefer **provision-only + `slicer wt`** over copying the directory directly — it gives the VM a working, self-contained `.git` and a clean way to get commits back.
+
+```bash
+slicer codex                 # provision a clean codex VM (note the name it prints)
+slicer wt push codex-1 .     # push the current worktree/repo into it
+slicer codex codex-1         # attach; let the agent work and commit
+slicer wt pull codex-1 .     # pull commits back — host branch fast-forwarded
+git push                     # push from the host under your own identity
+```
+
+Why not just `slicer codex ./repo`? A git **worktree**'s `.git` is a *file* holding an absolute host path; a plain copy leaves that pointer dangling and every git command in the VM fails. `slicer wt` stages a sanitised `.git` instead.
+
+### `slicer wt` commands
+
+| Command | Purpose |
+|---------|---------|
+| `slicer wt push [vm] [path]` | Push the worktree at `path` into an existing VM |
+| `slicer wt push --launch [path]` | Launch a fresh VM, then push |
+| `slicer wt pull <vm> [path]` | Import the VM's commits (auto fast-forward) and files |
+| `slicer wt list` | List worktree VMs (`*` marks the current directory's VM) |
+
+`path` defaults to `.`. Flags: `--depth N` (shallow clone), `--force` / `-f` (re-push, wipes VM-side state first), `--hostgroup`, `--tag`.
+
+- Stages a **fresh, sanitised `.git`** — no hooks, no foreign config; the VM cannot reach or corrupt the host repo.
+- Points `origin` at the **https** upstream so the VM can `git push`.
+- `wt pull` imports VM branches under `refs/slicer/<vm>/*` (host refs never clobbered) and fast-forwards your branch.
+
+**⚠️ One rule:** don't edit the host worktree while a VM holds it — `wt pull` overwrites host files with the VM's copy. Push it, let the VM work, pull it back.
+
+`slicer wt` is a recent addition — run `slicer wt --help` to confirm it is available in your build.
+
 ## .slicerignore
 
-Place at workspace root. Same syntax as `.gitignore`. Controls what gets copied into the VM.
+Place at workspace root. Same syntax as `.gitignore`. Controls what gets copied into the VM in workspace mode.
 
 ```
 # Example .slicerignore
@@ -70,6 +122,6 @@ All agent commands share:
 | `--hostgroup NAME` | Pick host group |
 | `--uid N` | UID for copy/exec/shell (default: auto-detect) |
 | `--timeout 5m` | Agent readiness timeout |
-| `--tmux local\|remote\|none` | Session mode |
+| `--tmux none\|local\|remote` | Session mode (default `none`) |
 | `--tag key=value` | Metadata tags |
 | `--url` / `--token-file` | API connection |

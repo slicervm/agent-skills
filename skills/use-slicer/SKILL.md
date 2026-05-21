@@ -550,31 +550,69 @@ slicer vm logs VM_NAME        # Boot/console log (--lines N)
 
 ## Agent Sandboxes (Coding Agents in VMs)
 
-Slicer can provision a fresh microVM, sync your workspace into it, and optionally launch a coding agent in one command.
+Slicer can provision a fresh microVM, install a coding agent into it, and — depending on the argument — sync your workspace and attach a session.
 
 ```bash
-slicer workspace [./path]       # Plain workspace + interactive shell (no agent)
-slicer amp [./path]             # Amp sandbox
-slicer claude [./path]          # Claude Code sandbox
-slicer codex [./path]           # Codex sandbox
-slicer opencode [./path]        # OpenCode sandbox
-slicer copilot [./path]         # GitHub Copilot CLI sandbox
+slicer workspace [./path|vm]   # Plain VM + shell (no agent)
+slicer amp       [./path|vm]   # Amp sandbox
+slicer claude    [./path|vm]   # Claude Code sandbox
+slicer codex     [./path|vm]   # Codex sandbox
+slicer opencode  [./path|vm]   # OpenCode sandbox
+slicer copilot   [./path|vm]   # GitHub Copilot CLI sandbox
 ```
 
-How they behave (based on the CLI help text):
-- If the argument is a **local directory** (or omitted, defaulting to `.`), Slicer will create a new VM, wait for the guest agent, and copy your workspace into the VM.
-- If the argument is **not** a local path, it is treated as a **VM name** and Slicer will reattach to that existing VM.
+### Three ways to run
 
-What each command does:
-- **`slicer workspace`**: syncs your project into a clean VM and opens a shell. No coding agent is installed/launched.
-- **`slicer amp/claude/codex/opencode/copilot`**: syncs your project, copies that tool's auth/config files into the VM, installs the agent via `arkade`, then attaches you to an agent session.
+The single optional argument selects the mode:
 
-Reattach to an existing VM by name: `slicer amp amp-1`
+- **No argument → provision-only.** Creates a VM, syncs your git identity, copies the agent's credentials in, and installs the agent — then stops. Nothing is copied from the host and no session is attached. Use this for a clean agent VM, then push code in with `slicer wt push` (see [Git worktrees](#git-worktrees-in-a-vm-slicer-wt)).
+- **A local directory → workspace copy.** Provisions as above, then tar-copies that directory in (honouring `.slicerignore`) and attaches the agent session.
+- **A VM name → reattach.** Anything that is not a local path is treated as an existing VM name; waits for the agent and reattaches.
 
-Session modes (for the agent sandboxes): `--tmux none`, `--tmux local`, `--tmux remote`.
-Default differs per command; check `slicer <agent> --help` if you need to be exact for the user's setup.
+```bash
+slicer codex                 # provision-only: VM + codex + creds, then stop
+slicer codex ./my-project    # copy ./my-project in, then attach
+slicer codex codex-1         # reattach to existing VM codex-1
+```
 
-Use `.slicerignore` at workspace root to exclude files (same syntax as `.gitignore`).
+> **Behaviour change:** bare `slicer codex` (no argument) no longer copies the current directory — it is now **provision-only**. Pass `.` explicitly (`slicer codex .`) to copy the cwd, or use the worktree flow below.
+
+`slicer workspace` follows the same three modes but installs no agent. Each agent command copies that tool's auth/config files in and installs the agent via `arkade`.
+
+Session modes: `--tmux none` (default), `--tmux local`, `--tmux remote`.
+
+Use `.slicerignore` at the workspace root to exclude files (same syntax as `.gitignore`).
+
+See [references/agent-sandboxes.md](references/agent-sandboxes.md) for credential paths, flags, and the worktree workflow.
+
+## Git Worktrees in a VM (`slicer wt`)
+
+`slicer wt` moves a git worktree (or whole repo) into a VM with a **working, self-contained `.git`**, lets the VM — or a coding agent in it — do the work, then pulls the commits back. The host repo is never mounted and its hooks never run in the VM.
+
+This is the recommended way to get a git project into an agent sandbox: provision the agent VM with no argument, then push the worktree in.
+
+```bash
+slicer codex                 # 1. provision a clean codex VM (note the name it prints)
+slicer wt push codex-1 .     # 2. push the current worktree/repo into it
+slicer codex codex-1         # 3. attach; let the agent work and commit
+slicer wt pull codex-1 .     # 4. pull commits back — host branch fast-forwarded
+git push                     # 5. push from the host under your own identity
+```
+
+Commands:
+
+- **`slicer wt push [vm] [path]`** — push the worktree at `path` into an existing VM
+- **`slicer wt push --launch [path]`** — launch a fresh VM, then push
+- **`slicer wt pull <vm> [path]`** — import the VM's commits (auto fast-forwards your branch) and files
+- **`slicer wt list`** — list worktree VMs (`*` marks the current directory's VM)
+
+`path` defaults to `.`. Useful flags: `--depth N` (shallow clone for big repos), `--force`/`-f` (re-push, wipes VM-side state first), `--hostgroup`, `--tag`.
+
+`wt push` stages a **sanitised `.git`** (no hooks, no foreign config), points `origin` at the **https** upstream so the VM can `git push`, and syncs your git identity — **credentials are never copied in**. `wt pull` imports the VM's branches under `refs/slicer/<vm>/*` (host refs untouched) and fast-forwards your branch.
+
+> **⚠️ One rule:** don't edit the host worktree while a VM holds it — `wt pull` overwrites host files with the VM's copy. Push it, let the VM/agent work, pull it back.
+
+`slicer wt` is a recent addition — run `slicer wt --help` to confirm it is available in your build.
 
 ---
 
