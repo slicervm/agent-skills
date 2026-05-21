@@ -14,6 +14,18 @@ Comprehensive skill covering the full Slicer workflow — connecting to daemons 
 
 Works from macOS (via slicer-mac) and Linux hosts.
 
+### use-slicer-worktrees
+
+`skills/use-slicer-worktrees`
+
+Move a git worktree or repository into a Slicer microVM with a working, self-contained `.git`. Covers `slicer wt push` / `pull` / `list` — push code in, let a VM or coding agent work and commit, then fast-forward the commits back onto your host branch. The recommended way to put a git project into a provision-only agent sandbox.
+
+### use-slicer-proxy
+
+`skills/use-slicer-proxy`
+
+Filter, audit, and inject secrets into HTTP(S) egress from Slicer microVMs with Slicer Proxy. Covers default-deny allow rules (host / path / method / port / TTL), credential injection (Bearer, Basic, and OAuth for Claude/Codex/Copilot/xAI), audit mode for path discovery, and TCP passthrough — on both Linux and macOS.
+
 ### use-s3-rustfs
 
 `skills/use-s3-rustfs`
@@ -44,11 +56,13 @@ This installs the skills into whichever AI coding agents you have (Claude Code, 
 ```bash
 /plugin marketplace add slicervm/agent-skills
 /plugin install use-slicer@slicer
+/plugin install use-slicer-worktrees@slicer
+/plugin install use-slicer-proxy@slicer
 /plugin install use-s3-rustfs@slicer
 /plugin install use-k3sup@slicer
 ```
 
-Install only the plugin skills you need; `use-s3-rustfs` assumes `use-slicer` is also installed.
+Install only the plugin skills you need; `use-s3-rustfs`, `use-slicer-worktrees`, and `use-slicer-proxy` all assume `use-slicer` is also installed.
 Claude Code exposes plugin skills under their plugin namespace, for example `/use-slicer:use-slicer`.
 
 ### Manual
@@ -78,6 +92,14 @@ Set up a k3s cluster in a Slicer VM
 
 ```
 Copy my project into a VM, build it, and bring back the binary
+```
+
+```
+Provision a Codex sandbox and push my git worktree into it
+```
+
+```
+Lock down a VM's egress so it can only reach the npm registry
 ```
 
 ## What is Slicer?

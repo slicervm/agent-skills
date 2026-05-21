@@ -565,7 +565,7 @@ slicer copilot   [./path|vm]   # GitHub Copilot CLI sandbox
 
 The single optional argument selects the mode:
 
-- **No argument → provision-only.** Creates a VM, syncs your git identity, copies the agent's credentials in, and installs the agent — then stops. Nothing is copied from the host and no session is attached. Use this for a clean agent VM, then push code in with `slicer wt push` (see [Git worktrees](#git-worktrees-in-a-vm-slicer-wt)).
+- **No argument → provision-only.** Creates a VM, syncs your git identity, copies the agent's credentials in, and installs the agent — then stops. Nothing is copied from the host and no session is attached. Use this for a clean agent VM, then push code in with `slicer wt push` (see the `use-slicer-worktrees` skill).
 - **A local directory → workspace copy.** Provisions as above, then tar-copies that directory in (honouring `.slicerignore`) and attaches the agent session.
 - **A VM name → reattach.** Anything that is not a local path is treated as an existing VM name; waits for the agent and reattaches.
 
@@ -585,34 +585,12 @@ Use `.slicerignore` at the workspace root to exclude files (same syntax as `.git
 
 See [references/agent-sandboxes.md](references/agent-sandboxes.md) for credential paths, flags, and the worktree workflow.
 
-## Git Worktrees in a VM (`slicer wt`)
+## Related skills
 
-`slicer wt` moves a git worktree (or whole repo) into a VM with a **working, self-contained `.git`**, lets the VM — or a coding agent in it — do the work, then pulls the commits back. The host repo is never mounted and its hooks never run in the VM.
+Two companion skills cover Slicer features in depth — load them when a task calls for them:
 
-This is the recommended way to get a git project into an agent sandbox: provision the agent VM with no argument, then push the worktree in.
-
-```bash
-slicer codex                 # 1. provision a clean codex VM (note the name it prints)
-slicer wt push codex-1 .     # 2. push the current worktree/repo into it
-slicer codex codex-1         # 3. attach; let the agent work and commit
-slicer wt pull codex-1 .     # 4. pull commits back — host branch fast-forwarded
-git push                     # 5. push from the host under your own identity
-```
-
-Commands:
-
-- **`slicer wt push [vm] [path]`** — push the worktree at `path` into an existing VM
-- **`slicer wt push --launch [path]`** — launch a fresh VM, then push
-- **`slicer wt pull <vm> [path]`** — import the VM's commits (auto fast-forwards your branch) and files
-- **`slicer wt list`** — list worktree VMs (`*` marks the current directory's VM)
-
-`path` defaults to `.`. Useful flags: `--depth N` (shallow clone for big repos), `--force`/`-f` (re-push, wipes VM-side state first), `--hostgroup`, `--tag`.
-
-`wt push` stages a **sanitised `.git`** (no hooks, no foreign config), points `origin` at the **https** upstream so the VM can `git push`, and syncs your git identity — **credentials are never copied in**. `wt pull` imports the VM's branches under `refs/slicer/<vm>/*` (host refs untouched) and fast-forwards your branch.
-
-> **⚠️ One rule:** don't edit the host worktree while a VM holds it — `wt pull` overwrites host files with the VM's copy. Push it, let the VM/agent work, pull it back.
-
-`slicer wt` is a recent addition — run `slicer wt --help` to confirm it is available in your build.
+- **`use-slicer-worktrees`** — get a git worktree or repository into a VM with a working, self-contained `.git`, then pull commits back (`slicer wt push` / `pull` / `list`). This is the recommended way to put a git project into a provision-only agent sandbox.
+- **`use-slicer-proxy`** — filter, audit, and inject secrets into HTTP(S) egress from VMs with Slicer Proxy: default-deny allow rules, credential injection (Bearer, Basic, OAuth), and audit / passthrough modes, on Linux and macOS.
 
 ---
 

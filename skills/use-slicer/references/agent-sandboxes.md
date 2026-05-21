@@ -74,26 +74,7 @@ slicer wt pull codex-1 .     # pull commits back — host branch fast-forwarded
 git push                     # push from the host under your own identity
 ```
 
-Why not just `slicer codex ./repo`? A git **worktree**'s `.git` is a *file* holding an absolute host path; a plain copy leaves that pointer dangling and every git command in the VM fails. `slicer wt` stages a sanitised `.git` instead.
-
-### `slicer wt` commands
-
-| Command | Purpose |
-|---------|---------|
-| `slicer wt push [vm] [path]` | Push the worktree at `path` into an existing VM |
-| `slicer wt push --launch [path]` | Launch a fresh VM, then push |
-| `slicer wt pull <vm> [path]` | Import the VM's commits (auto fast-forward) and files |
-| `slicer wt list` | List worktree VMs (`*` marks the current directory's VM) |
-
-`path` defaults to `.`. Flags: `--depth N` (shallow clone), `--force` / `-f` (re-push, wipes VM-side state first), `--hostgroup`, `--tag`.
-
-- Stages a **fresh, sanitised `.git`** — no hooks, no foreign config; the VM cannot reach or corrupt the host repo.
-- Points `origin` at the **https** upstream so the VM can `git push`.
-- `wt pull` imports VM branches under `refs/slicer/<vm>/*` (host refs never clobbered) and fast-forwards your branch.
-
-**⚠️ One rule:** don't edit the host worktree while a VM holds it — `wt pull` overwrites host files with the VM's copy. Push it, let the VM work, pull it back.
-
-`slicer wt` is a recent addition — run `slicer wt --help` to confirm it is available in your build.
+A plain copy of a git worktree breaks: its `.git` is a *file* holding an absolute host path, so every git command in the VM fails. `slicer wt` stages a sanitised `.git` instead. See the **`use-slicer-worktrees`** skill for the full `slicer wt push` / `pull` / `list` reference.
 
 ## .slicerignore
 
