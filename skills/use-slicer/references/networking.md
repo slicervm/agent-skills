@@ -119,10 +119,10 @@ The Slicer API server can listen on:
 
 | Bind | Example | Auth |
 |------|---------|------|
-| TCP (loopback) | `--api-bind 127.0.0.1 --api-port 8080` | Enabled by default |
-| TCP (all interfaces) | `--api-bind 0.0.0.0` | Enabled by default |
-| Unix socket | `--api-bind /tmp/slicer.sock` | Disabled by default |
+| TCP (loopback) | `--api-bind 127.0.0.1 --api-port 8080` | On by default — keep it |
+| TCP (all interfaces) | `--api-bind 0.0.0.0` | On by default — keep it |
+| Unix socket | `--socket /tmp/slicer.sock` | Off by default — keep it off |
 
-For TCP, auth uses Bearer tokens from `/var/lib/slicer/auth/token` (or `config.api.auth.token`).
+`--api-auth` defaults to on for TCP binds and off for Unix sockets. Leave it at the default: never disable auth on a TCP bind (it would publish an unauthenticated control plane), and never add auth on a Unix socket (filesystem permissions already gate it).
 
-Unix sockets rely on filesystem permissions — auth is off by default but can be enabled with `--api-auth`.
+For TCP, auth uses Bearer tokens from `/var/lib/slicer/auth/token` (or `config.api.auth.token`). `--api-bind 0.0.0.0` is viable for local testing and trusted LANs; on the public Internet keep the API bound to `127.0.0.1` and front it with an [inlets](https://inlets.dev) tunnel or a [Caddy](https://caddyserver.com) reverse proxy for TLS — see the [Slicer API reference](https://docs.slicervm.com/reference/api/).

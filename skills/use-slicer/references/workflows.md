@@ -55,6 +55,16 @@ export PATH=$PATH:$HOME/.arkade/bin
 KUBECONFIG=./k3s.yaml kubectl get nodes
 ```
 
+### Merging the kubeconfig into `~/.kube/config`
+
+The copied `k3s.yaml` has `server: https://127.0.0.1:6443` and names its cluster, context, and user all `default`. That is fine standalone (the `KUBECONFIG=./k3s.yaml` line above), but to fold it in alongside your other clusters:
+
+- **Server address.** Keep the `slicer vm forward -L 6443:127.0.0.1:6443` running, or rewrite it to the VM's IP (from `slicer vm list`, reachable in bridge mode):
+  ```bash
+  sed -i 's#127.0.0.1:6443#<VM_IP>:6443#' ./k3s.yaml
+  ```
+- **Merge.** The clean way is to provision with `k3sup`, which renames the cluster/context/user and merges atomically — `k3sup install ... --merge --local-path ~/.kube/config --context slicer-vm` (or `k3sup get-config --merge` for an existing cluster). See the `use-k3sup` skill. A raw `curl | sh` install gives a standalone file you would otherwise have to merge by hand, carefully renaming the three `default` entries so they do not clobber an existing `default` context.
+
 For Kubernetes bootstrap workflows, prefer pulling toolchain CLIs via `arkade` (for example `arkade get k3sup kubectl` and `arkade get helm`) rather than external ad-hoc installers. Keep in mind the binaries are under `~/.arkade/bin`.
 
 Do not start cluster accessibility flows (such as `kubectl port-forward`) inside `userdata`. Use `userdata` only for setup/bootstrap tasks, then use `slicer vm forward` from the host after VM readiness for host access.

@@ -17,9 +17,8 @@ Key flags for `slicer new`:
 | `--ram N` | RAM in GiB (default 4) |
 | `--net isolated` | Isolated networking (no inter-VM traffic) |
 | `--cidr 192.168.137.0/24` | Network range |
-| `--api-bind 127.0.0.1` | TCP bind address |
-| `--api-bind /tmp/slicer.sock` | Unix socket |
-| `--api-auth=false` | Disable auth |
+| `--api-bind 127.0.0.1` | TCP bind (loopback) — auth on by default, keep it |
+| `--socket ./slicer.sock` | Unix socket bind — auth off by default, keep it |
 | `--image ghcr.io/...` | Custom rootfs image |
 | `--storage image` | Persistent disk mode (default) |
 | `--storage-size 25G` | Disk size |
@@ -28,6 +27,18 @@ Key flags for `slicer new`:
 | `--userdata-file ./setup.sh` | Userdata script |
 | `--graceful-shutdown=false` | Fast teardown |
 | `--min` | Minimal image (faster boot, no Docker/K8s) |
+
+## Exposing the API: TCP vs Unix socket
+
+How you bind the API also fixes the auth setting — `--api-auth` defaults to on for TCP and off for Unix sockets. **Leave `--api-auth` alone**: never disable it on a TCP bind (that publishes an unauthenticated control plane), and never add it on a socket (filesystem permissions already gate it).
+
+- **Local use only → Unix socket.** Bind with `--socket ./slicer.sock`. Access is gated by filesystem permissions and the socket isn't reachable off-box, so auth stays off. Clients just point `SLICER_URL` at the socket path.
+- **Local testing or a trusted LAN → TCP.** Use `--api-bind 127.0.0.1` for same-host clients, or `--api-bind 0.0.0.0` to reach the API from elsewhere on a trusted network. Auth stays on either way.
+- **Public Internet → keep the API on loopback and front it.** Bind `--api-bind 127.0.0.1` and never expose `0.0.0.0` to the open Internet. Put a TLS terminator in front:
+  - an [inlets](https://inlets.dev) tunnel — good behind NAT or without a public IP; inlets can terminate TLS for you; or
+  - [Caddy](https://caddyserver.com) as a reverse proxy with automatic Let's Encrypt certificates, forwarding to the loopback API.
+
+  See the [Slicer API reference](https://docs.slicervm.com/reference/api/) for both setups.
 
 ## ⚠️ Avoid CIDR and host group conflicts
 
@@ -55,9 +66,10 @@ If no daemon is running, start one. **Check for conflicts first** — CIDRs and 
 ps aux | grep -E "slicer|firecracker" | grep -v grep
 ip route | grep 192.168
 
-# Generate config with a unique CIDR
+# Generate config with a unique CIDR.
+# Local-only daemon — Unix socket, auth off by default (don't add it).
 slicer new sandbox --count=0 --graceful-shutdown=false \
-  --api-bind=/tmp/slicer-sandbox.sock --api-auth=false \
+  --socket=/tmp/slicer-sandbox.sock \
   --cidr 192.168.140.0/24 > sandbox.yaml
 
 # Start daemon
@@ -72,6 +84,53 @@ The plain foreground form is just:
 ```bash
 sudo -E slicer up ./config.yaml
 ```
+
+`-E` matters: it preserves `HOME` so a root daemon still reads *your* license at `~/.slicer/LICENSE` rather than `/root/.slicer/LICENSE`. For an unattended service, set the license explicitly instead — see the next section.
+
+## Run as a systemd service
+
+For a host that should run Slicer on boot and restart on failure, install a systemd unit. Running directly as `User=root` is simplest — Slicer needs root for KVM and networking anyway, so this avoids a sudo wrapper and a sudoers change.
+
+**Name the daemon's directory after its primary host group.** A `slicer.yaml` can define more than one host group, but `slicer new k3s` scaffolds the config around a primary host group `k3s` — name the directory to match, by convention. Keep the config, VM images, and per-daemon `.slicer/` state together in `/root/k3s/`:
+
+```bash
+sudo mkdir -p /root/k3s
+slicer new k3s > /root/k3s/slicer.yaml
+```
+
+Then create `/etc/systemd/system/slicer-k3s.service`:
+
+```ini
+[Unit]
+Description=Slicer microVM daemon (k3s)
+After=network-online.target containerd.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/k3s
+ExecStart=/usr/local/bin/slicer up --license-file /home/<user>/.slicer/LICENSE /root/k3s/slicer.yaml
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now slicer-k3s.service
+sudo journalctl -u slicer-k3s -f --output=cat      # follow logs
+```
+
+**Why a dedicated directory.** In `storage: image` mode Slicer creates each VM's `.img` disk and the daemon's `.slicer/` state relative to `WorkingDirectory`. Pointing it at `/root/k3s` keeps everything for that daemon in one place — `slicer.yaml` alongside `k3s-1.img`, `k3s-2.img`, … (and the `.img` files for any other host groups the config defines) — so the daemon's whole footprint is a single directory you can size, back up, or delete as a unit. Choose a path with enough free space (not `/`). `storage: zvol` / `devmapper` keep disks in their pools instead, so the directory then only holds config and `.slicer/` state.
+
+**License — point the unit at the real file, don't copy it.** Slicer resolves a license at startup in this order: the `--license-file` flag, then `/home/<SUDO_USER>/.slicer/LICENSE` (only when started via `sudo`), then `$HOME/.slicer/LICENSE`. A systemd unit runs with no `sudo` and `HOME=/root`, so without help it only finds `/root/.slicer/LICENSE`. Copying your license there works but **drifts** — renewing with `slicer activate` updates `~/.slicer/LICENSE` for your user, not the root copy. The `--license-file` flag in `ExecStart` above points at the one file `slicer activate` keeps current, so every restart picks up the latest.
+
+To add more host groups, edit them into the same `slicer.yaml` — that does not need a new directory or unit. A second daemon is only warranted when you want genuine isolation (separate API socket, non-overlapping CIDR); then repeat with its own `/root/<hostgroup>/slicer.yaml` and a matching `slicer-<hostgroup>.service` unit. To stop or disable: `sudo systemctl stop slicer-k3s` / `sudo systemctl disable slicer-k3s`.
 
 ## Start a daemon on a remote machine over SSH
 
