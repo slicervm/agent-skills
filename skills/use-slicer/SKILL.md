@@ -33,7 +33,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/workflows.md](references/workflows.md) — worked recipes (E2E, Docker, builds, k3s, DB, SSH)
 - [references/custom-images.md](references/custom-images.md) — custom rootfs images and userdata
 - [references/bg-exec.md](references/bg-exec.md) — background exec detail
-- [references/networking.md](references/networking.md) — bridge vs isolated networking
+- [references/networking.md](references/networking.md) — bridge, isolated, and macvtap (LAN-direct) networking
 - [references/agent-sandboxes.md](references/agent-sandboxes.md) — coding-agent sandbox detail
 
 Companion skills: **`use-slicer-worktrees`** (git worktrees in a VM), **`use-slicer-proxy`** (filtered egress + secret injection).
@@ -431,7 +431,7 @@ slicer vm forward VM_NAME -L 8080:127.0.0.1:8080 -L 5432:127.0.0.1:5432
 
 Port forwards run in the foreground — use `&` to background them.
 
-See [references/networking.md](references/networking.md) for bridge vs isolated networking.
+See [references/networking.md](references/networking.md) for bridge, isolated, and macvtap (LAN-direct) networking.
 
 ---
 

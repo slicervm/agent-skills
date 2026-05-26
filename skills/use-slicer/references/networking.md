@@ -2,7 +2,7 @@
 
 ## Network Modes
 
-Slicer supports two networking modes, set at config generation time via `slicer new --net`:
+Slicer supports three networking modes, set at config generation time via `slicer new --net`:
 
 ### Bridge Mode (default)
 
@@ -60,6 +60,38 @@ Key flags for isolated mode:
 | `--allow CIDR` | Allow outbound to this range (repeatable) |
 | `--drop CIDR` | Block outbound to this range (repeatable) |
 | `--isolated-range CIDR` | Override the link-local range (default `169.254.100.0/22`) |
+
+### Macvtap Mode (LAN-direct)
+
+```bash
+# Static IPs from your LAN
+slicer new pihole --net macvtap --cidr 192.168.1.1/24 \
+  --address 192.168.1.50 --address 192.168.1.51
+
+# Auto-pool: slicer allocates from the top of the subnet (.220–.254)
+slicer new homelab --net macvtap --cidr 192.168.1.1/24
+
+# DHCP: omit --cidr too — the LAN router assigns each VM an IP
+slicer new homelab --net macvtap
+```
+
+- VMs appear as **first-class devices on the physical LAN** — switches, routers, and DHCP servers see each VM as a separate host with its own MAC and IP. No bridge, no NAT, no iptables, no port forwarding. The VM's default route is your LAN gateway.
+- **Linux + Firecracker only.** Not supported on qemu, and not on the `--min` image (the DHCP helper isn't included there). macOS hosts use the slicer-mac modes instead.
+- **`--cidr` is the LAN gateway in CIDR form**, e.g. `192.168.1.1/24` — your home router, not a slicer-private range. The macvlan parent NIC is auto-detected from the host's egress adapter.
+  - With `--address` you pin exact IPs.
+  - With `--cidr` but no `--address`, slicer auto-allocates `.220`–`.254` of that subnet — deliberately above typical home-DHCP pools so it doesn't clash with leases. Make sure your router's DHCP pool ends at `.219` or lower if you want to be belt-and-braces.
+  - With neither flag, the VM DHCPs from the LAN router. `slicer vm list` shows the acquired IP a few seconds after boot, once the in-guest agent reports it back over vsock.
+- **Host ↔ VM via LAN IP is blocked by the kernel.** A macvlan child can't exchange frames with its own parent NIC, so `ping <VM-LAN-IP>` from the host fails and `ssh ubuntu@<VM-LAN-IP>` from the host won't connect. Vsock-based ops are unaffected — `slicer vm exec`, `slicer vm cp`, `slicer vm shell`, `slicer vm forward` all work as usual. Any other device on the LAN reaches the VM normally.
+- **Parent NIC must support macvlan.** Wired Ethernet on bare metal: yes. Wi-Fi: no. VPS with a single allowed MAC per port: no. Use bridge or isolated mode in those cases.
+- Best for: homelab appliances (pi-hole, NAS, home DNS), long-running e2e LAN clusters (k3s, [inlets uplink](https://inlets.dev)).
+
+Key flags for macvtap mode:
+
+| Flag | Purpose |
+|------|---------|
+| `--net macvtap` | Enable macvtap (LAN-direct) networking |
+| `--cidr 192.168.1.1/24` | LAN gateway in CIDR form (your router) — omit for DHCP |
+| `--address 192.168.1.50` | Pin a specific LAN IP (repeatable) — omit for auto-pool or DHCP |
 
 ## Accessing VMs from Other Machines
 

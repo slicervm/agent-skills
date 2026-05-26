@@ -16,7 +16,9 @@ Key flags for `slicer new`:
 | `--cpu N` | vCPUs per VM (default 2) |
 | `--ram N` | RAM in GiB (default 4) |
 | `--net isolated` | Isolated networking (no inter-VM traffic) |
-| `--cidr 192.168.137.0/24` | Network range |
+| `--net macvtap` | LAN-direct (Linux + Firecracker only) — see [networking.md](networking.md#macvtap-mode-lan-direct) |
+| `--cidr 192.168.137.0/24` | Network range — for macvtap, this is your LAN gateway (e.g. `192.168.1.1/24`) |
+| `--address 192.168.1.50` | Pin a specific IP (repeatable, macvtap mode) |
 | `--api-bind 127.0.0.1` | TCP bind (loopback) — auth on by default, keep it |
 | `--socket ./slicer.sock` | Unix socket bind — auth off by default, keep it |
 | `--image ghcr.io/...` | Custom rootfs image |
