@@ -172,6 +172,7 @@ The hostname is printed on creation (e.g. `demo-3`). Key flags:
 | `--shell` | Open shell immediately after boot |
 | `--tag env=ci` | Metadata tags |
 | `--secrets secret1,secret2` | Allow access to named secrets |
+| `--persistent` | Keep VM state across daemon restarts/shutdowns (default `true`); pass `--persistent=false` for ephemeral |
 
 Important: do not use readiness flags on `slicer vm add`. If startup blocking or readiness is required, run `slicer vm ready <VM_NAME>` as a separate step.
 
@@ -179,12 +180,12 @@ When creating VMs for mutable tasks, do not target or reuse `slicer-1` on slicer
 
 ### Persistent temporary VMs
 
-Use `--persistent` when you want a VM that survives daemon restarts and shutdowns but is still a disposable, tagged sandbox (not the primary twin). Always pair it with a descriptive `--tag` so the VM can be rediscovered later.
+VMs created with `slicer vm add` are persistent by default, they survive daemon restarts and shutdowns. Pair every launch with descriptive `--tag`s so the sandbox can be rediscovered later. Pass `--persistent=false` only when you want a one-shot ephemeral VM that disappears with the daemon.
 
 **On slicer-mac**: launch into the `sbox` host group explicitly — the `slicer` group is reserved for the persistent Linux twin.
 
 ```bash
-VM_NAME=$(slicer vm add sbox --persistent \
+VM_NAME=$(slicer vm add sbox \
   --tag "workflow=rustfs" --tag "purpose=s3-demo" \
   | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
@@ -198,11 +199,11 @@ slicer vm list --json | jq -r '.[] | select(.tags.workflow=="rustfs") | .hostnam
 1. List groups first and pick an appropriate one:
    ```bash
    slicer vm group --url "$SLICER_URL" --token-file "$SLICER_TOKEN_FILE"
-   slicer vm add <group> --persistent --tag "workflow=..." ...
+   slicer vm add <group> --tag "workflow=..." ...
    ```
 2. Or skip the check and launch into the default group by omitting the positional arg:
    ```bash
-   slicer vm add --persistent --tag "workflow=..." ...
+   slicer vm add --tag "workflow=..." ...
    ```
 
 ### Wait for readiness
