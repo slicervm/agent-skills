@@ -23,7 +23,7 @@ This skill assumes you also have `use-slicer` — RustFS runs inside a Slicer mi
 
 ```bash
 # 1. Persistent sandbox VM, tagged so you can find it again
-VM_NAME=$(slicer vm add sbox --persistent \
+VM_NAME=$(slicer vm add sbox \
   --tag "workflow=rustfs" --tag "app=s3" \
   | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
@@ -48,7 +48,7 @@ Service is now listening on port **9000** (S3 API) and **9001** (web console) in
 
 RustFS wants to bind privileged directories (`/data/rustfs0`, `/var/logs/rustfs`) and install a systemd unit. Running it inside a disposable Slicer VM keeps your host clean, lets you snapshot/reset the storage instantly, and matches production-like deployment.
 
-Always launch with `--persistent` + descriptive `--tag`s so the VM survives daemon restarts and can be rediscovered:
+`slicer vm add` is persistent by default, it survives daemon restarts. Always launch with a descriptive `--tag`s so the VM can be rediscovered:
 
 ```bash
 slicer vm list --json | jq -r '.[] | select(.tags.workflow=="rustfs") | .hostname'
