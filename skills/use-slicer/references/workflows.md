@@ -47,7 +47,10 @@ slicer vm ready "$VM_NAME"
 # Install Kubernetes CLIs with arkade (already available on slicer images).
 # Default install path is ~/.arkade/bin.
 slicer vm exec "$VM_NAME" --uid 1000 -- "arkade get k3sup kubectl helm"
-slicer vm exec "$VM_NAME" --uid 1000 -- "curl -sfL https://get.k3s.io | sh -"
+# Prefer k3sup for single-node installs (matches the use-k3sup skill's golden
+# rule); fall back to the raw installer only when k3sup is unavailable:
+slicer vm exec "$VM_NAME" --uid 1000 -- "~/.arkade/bin/k3sup install --local --context default"
+# Alternative: slicer vm exec "$VM_NAME" --uid 1000 -- "curl -sfL https://get.k3s.io | sh -"
 slicer vm ready "$VM_NAME" --userdata --timeout 2m
 slicer vm forward "$VM_NAME" -L 6443:127.0.0.1:6443 &
 slicer vm cp "$VM_NAME":/etc/rancher/k3s/k3s.yaml ./k3s.yaml
