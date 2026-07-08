@@ -124,6 +124,27 @@ slicer vm forward VM -L /tmp/d.sock:/var/run/docker.sock  # Unix socket
 slicer vm forward VM -L 2375:/var/run/docker.sock   # Socket → TCP
 ```
 
+### Local bind adapter (reaching a forward from a container)
+
+A forward with no explicit `local_bind` listens on `127.0.0.1` only. That is
+invisible to a Docker-bridged process on the host — e.g. `faas-cli local-run`,
+which reaches the host via the bridge gateway `172.17.0.1`, not loopback. Set
+the local bind adapter so the forward listens where the container can see it:
+
+```bash
+# reachable from the host loopback only (default)
+slicer vm forward VM -L 5432:127.0.0.1:5432
+
+# reachable from bridged containers via the Docker gateway
+slicer vm forward VM -L 172.17.0.1:5432:127.0.0.1:5432
+
+# reachable from anything on the host (all interfaces)
+slicer vm forward VM -L 0.0.0.0:5432:127.0.0.1:5432
+```
+
+The consuming process then targets that adapter — e.g. a bridged container uses
+`172.17.0.1:5432`, not `127.0.0.1:5432`.
+
 ## SSH Access
 
 SSH is pre-installed on every image. Keys are injected via:
