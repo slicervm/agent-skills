@@ -18,7 +18,7 @@ Works from macOS (via slicer-mac) and Linux hosts.
 
 `skills/use-slicer-worktrees`
 
-Move a git worktree or repository into a Slicer microVM with a working, self-contained `.git`. Covers `slicer wt push` / `pull` / `list` — push code in, let a VM or coding agent work and commit, then fast-forward the commits back onto your host branch. The recommended way to put a git project into a provision-only agent sandbox.
+Move a git worktree or repository into a Slicer microVM with a working, self-contained `.git`. Prefer agent `--worktree` mode for coding sandboxes; use `slicer wt push` / `pull` / `list` for lower-level VM flows. Pull commits back onto your host branch when the VM work is done.
 
 ### use-slicer-proxy
 
@@ -95,7 +95,7 @@ Copy my project into a VM, build it, and bring back the binary
 ```
 
 ```
-Provision a Codex sandbox and push my git worktree into it
+Launch a Codex sandbox with my git worktree
 ```
 
 ```
