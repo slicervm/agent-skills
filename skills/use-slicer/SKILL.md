@@ -461,7 +461,7 @@ slicer vm logs VM_NAME        # Boot/console log (--lines N)
 
 ## Agent Sandboxes (Coding Agents in VMs)
 
-Slicer can provision a fresh microVM, install a coding agent into it, and — depending on the argument — sync your workspace and attach a session.
+Slicer can provision a fresh microVM, install a coding agent into it, and — depending on the argument or flags — sync your workspace or git worktree and attach a session.
 
 ```bash
 slicer workspace [./path|vm]   # Plain VM + shell (no agent)
@@ -470,25 +470,30 @@ slicer claude    [./path|vm]   # Claude Code sandbox
 slicer codex     [./path|vm]   # Codex sandbox
 slicer opencode  [./path|vm]   # OpenCode sandbox
 slicer copilot   [./path|vm]   # GitHub Copilot CLI sandbox
+slicer pi        [./path|vm]   # Pi sandbox
 ```
 
-### Three ways to run
+### Ways to run
 
-The single optional argument selects the mode:
+The optional argument and worktree flags select the mode:
 
-- **No argument → provision-only.** Creates a VM, syncs your git identity, copies the agent's credentials in, and installs the agent — then stops. Nothing is copied from the host and no session is attached. Use this for a clean agent VM, then push code in with `slicer wt push` (see the `use-slicer-worktrees` skill).
+- **No argument → provision-only.** Creates a VM, syncs your git identity, copies the agent's credentials in, and installs the agent — then stops. Nothing is copied from the host and no session is attached. This is mainly for advanced/manual flows; for git repos, prefer `--worktree`.
 - **A local directory → workspace copy.** Provisions as above, then tar-copies that directory in (honouring `.slicerignore`) and attaches the agent session.
 - **A VM name → reattach.** Anything that is not a local path is treated as an existing VM name; waits for the agent and reattaches.
+- **`--worktree` / `--wt` → worktree mode.** Launches/provisions the agent VM, pushes a git worktree with a self-contained `.git`, installs the agent in that path, and attaches.
 
 ```bash
-slicer codex                 # provision-only: VM + codex + creds, then stop
+slicer codex --worktree .    # push current git worktree and attach
 slicer codex ./my-project    # copy ./my-project in, then attach
+slicer codex                 # provision-only: VM + codex + creds, then stop
 slicer codex codex-1         # reattach to existing VM codex-1
 ```
 
 > **Behaviour change:** bare `slicer codex` (no argument) no longer copies the current directory — it is now **provision-only**. Pass `.` explicitly (`slicer codex .`) to copy the cwd, or use the worktree flow below.
 
-`slicer workspace` follows the same three modes but installs no agent. Each agent command copies that tool's auth/config files in and installs the agent via `arkade`.
+`slicer workspace` follows the same modes but installs no agent. Each agent command copies that tool's auth/config files in and installs the agent via `arkade`.
+
+Agent and worktree sandbox VMs are persistent by default; pass `--rm` for a disposable VM.
 
 Session modes: `--tmux none` (default), `--tmux local`, `--tmux remote`.
 
@@ -500,7 +505,7 @@ See [references/agent-sandboxes.md](references/agent-sandboxes.md) for credentia
 
 Two companion skills cover Slicer features in depth — load them when a task calls for them:
 
-- **`use-slicer-worktrees`** — get a git worktree or repository into a VM with a working, self-contained `.git`, then pull commits back (`slicer wt push` / `pull` / `list`). This is the recommended way to put a git project into a provision-only agent sandbox.
+- **`use-slicer-worktrees`** — get a git worktree or repository into a VM with a working, self-contained `.git`, then pull commits back. Prefer agent `--worktree`; use `slicer wt push` / `pull` / `list` for manual VM flows.
 - **`use-slicer-proxy`** — filter, audit, and inject secrets into HTTP(S) egress from VMs with Slicer Proxy: default-deny allow rules, credential injection (Bearer, Basic, OAuth), and audit / passthrough modes, on Linux and macOS.
 
 ---
