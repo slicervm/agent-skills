@@ -100,42 +100,26 @@ sudo mkdir -p /root/k3s
 slicer new k3s > /root/k3s/slicer.yaml
 ```
 
-Then create `/etc/systemd/system/slicer-k3s.service`:
+Then generate, install, enable, and start the systemd unit:
 
-```ini
-[Unit]
-Description=Slicer microVM daemon (k3s)
-After=network-online.target containerd.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/root/k3s
-ExecStart=/usr/local/bin/slicer up --license-file /home/<user>/.slicer/LICENSE /root/k3s/slicer.yaml
-Restart=on-failure
-RestartSec=5
-TimeoutStopSec=180
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo slicer service generate --install \
+  --name slicer-k3s \
+  --working-directory /root/k3s \
+  --timeout-stop-sec 180
 ```
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now slicer-k3s.service
 sudo journalctl -u slicer-k3s -f --output=cat      # follow logs
 ```
 
 **Why a dedicated directory.** In `storage: image` mode Slicer creates each VM's `.img` disk and the daemon's `.slicer/` state relative to `WorkingDirectory`. Pointing it at `/root/k3s` keeps everything for that daemon in one place — `slicer.yaml` alongside `k3s-1.img`, `k3s-2.img`, … (and the `.img` files for any other host groups the config defines) — so the daemon's whole footprint is a single directory you can size, back up, or delete as a unit. Choose a path with enough free space (not `/`). `storage: zvol` / `devmapper` keep disks in their pools instead, so the directory then only holds config and `.slicer/` state.
 
-**License — point the unit at the real file, don't copy it.** Slicer resolves a license at startup in this order: the `--license-file` flag, then `/home/<SUDO_USER>/.slicer/LICENSE` (only when started via `sudo`), then `$HOME/.slicer/LICENSE`. A systemd unit runs with no `sudo` and `HOME=/root`, so without help it only finds `/root/.slicer/LICENSE`. Copying your license there works but **drifts** — renewing with `slicer activate` updates `~/.slicer/LICENSE` for your user, not the root copy. The `--license-file` flag in `ExecStart` above points at the one file `slicer activate` keeps current, so every restart picks up the latest.
+**License — point the unit at the real file, don't copy it.** `slicer service generate --install` writes an explicit `--license-file` into `ExecStart`. When run through `sudo`, it resolves the invoking user's `~/.slicer/LICENSE`; with `--user`, it resolves that user's license instead. Pass `--license-file` when you need a specific path.
 
-**Stop timeout.** With `graceful_shutdown` on, Slicer waits up to ~120s for VMs to power off cleanly when the daemon is told to stop. `TimeoutStopSec=180` gives it that room — systemd's 90s default would `SIGKILL` the daemon mid-shutdown, orphaning firecracker processes. (`slicer` handles `SIGINT` and `SIGTERM` identically, so systemd's default `KillSignal` needs no change.)
+**Stop timeout.** With `graceful_shutdown` on, Slicer waits up to ~120s for VMs to power off cleanly when the daemon is told to stop. `--timeout-stop-sec 180` gives it that room.
 
-To add more host groups, edit them into the same `slicer.yaml` — that does not need a new directory or unit. A second daemon is only warranted when you want genuine isolation (separate API socket, non-overlapping CIDR); then repeat with its own `/root/<hostgroup>/slicer.yaml` and a matching `slicer-<hostgroup>.service` unit. To stop or disable: `sudo systemctl stop slicer-k3s` / `sudo systemctl disable slicer-k3s`.
+To add more host groups, edit them into the same `slicer.yaml` — that does not need a new directory or unit. A second daemon is only warranted when you want genuine isolation (separate API socket, non-overlapping CIDR); then repeat with its own `/root/<hostgroup>/slicer.yaml` and a matching `--name slicer-<hostgroup>`. To stop or disable: `sudo systemctl stop slicer-k3s` / `sudo systemctl disable slicer-k3s`.
 
 ## Start a daemon on a remote machine over SSH
 
