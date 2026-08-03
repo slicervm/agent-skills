@@ -1,0 +1,161 @@
+# Cold Forking Prepared VMs
+
+Cold forking commits the disk of a stopped, persistent builder VM, then starts
+clean children from that immutable disk state. Use it when setup is expensive
+or every job should start from the same known state.
+
+## Requirements and boundaries
+
+Cold forking currently requires:
+
+- a Linux Slicer daemon using Firecracker
+- `image`, `devmapper`, or `zvol` storage
+- a stopped, persistent source VM
+- bridge or isolated networking
+
+It is not yet available in Slicer for Mac. Slicer for Mac supports suspend and
+restore, but cannot commit and fork a VM. Cold forking is also different from
+suspend/restore: only disk state is reused; processes, sockets, and RAM are not.
+
+Bridge-mode forks work, but inherit their host-group networking. Per-fork
+`--allow`, `--no-allow`, and `--drop` rules require isolated networking.
+
+## Terms
+
+- **Builder**: the original persistent VM which performs setup and is committed.
+- **Runner**: an allocator-named child forked from the commit.
+- **Cache key**: a caller-owned key which maps reusable setup inputs to a commit.
+
+Never choose a runner hostname. `slicer vm fork` accepts one positional value,
+the commit ID, and returns the allocated hostname. Use tags for job, tenant, or
+workflow identity.
+
+## Agent-safe workflow
+
+Use JSON for every value consumed by automation. Pick an existing Firecracker
+host group, then look for a cached builder before doing any setup:
+
+```bash
+GROUP=runners
+WORKFLOW=cold-fork-arkade
+CACHE_KEY=arkade-go-v1
+
+COMMIT=$(slicer vm commit list \
+  --cache-key "$CACHE_KEY" \
+  --json | jq -r '.[0].commit_id // empty')
+```
+
+On a cache miss, launch and prepare a persistent builder. Give every VM a
+descriptive tag:
+
+```bash
+if [ -z "$COMMIT" ]; then
+  BUILDER=$(slicer vm add "$GROUP" \
+    --persistent \
+    --tag "workflow=$WORKFLOW" \
+    --tag role=builder \
+    --wait \
+    --json | jq -r '.hostname')
+
+  slicer vm exec "$BUILDER" -- \
+    "sudo arkade system install go"
+
+  slicer vm exec "$BUILDER" -- \
+    "git clone https://github.com/alexellis/arkade /home/ubuntu/arkade && \
+     cd /home/ubuntu/arkade && \
+     /usr/local/go/bin/go build -mod=vendor -o ./arkade"
+
+  slicer vm shutdown "$BUILDER"
+  COMMIT=$(slicer vm commit "$BUILDER" \
+    --cache-key "$CACHE_KEY" \
+    --tag "workflow=$WORKFLOW" \
+    --json | jq -r '.commit_id')
+fi
+```
+
+The cache is for the complete committed disk, not individual layers. The
+caller owns invalidation: include the base image, toolchain, setup-script, or
+lock-file version in the key, and change it when those inputs change.
+
+On a hit, skip the whole builder block and fork immediately:
+
+```bash
+RUNNER=$(slicer vm fork "$COMMIT" \
+  --tag "workflow=$WORKFLOW" \
+  --tag role=runner \
+  --json | jq -r '.hostname')
+
+slicer vm exec "$RUNNER" -- "hostname && cat /etc/machine-id"
+```
+
+Each child receives its own allocated hostname, IP/MAC identity, guest
+hostname, and machine ID. Minimal Slicer images do not contain SSH keys, so do
+not use SSH host-key presence as a generic identity check.
+
+## Fork with no egress
+
+Only use these flags with an isolated host group:
+
+```bash
+RUNNER=$(slicer vm fork "$COMMIT" \
+  --tag "workflow=$WORKFLOW" \
+  --tag role=closed-runner \
+  --no-allow \
+  --drop 0.0.0.0/0 \
+  --json | jq -r '.hostname')
+```
+
+The DROP is applied outside the guest. For partial access, replace the empty
+allow list with explicit `--allow` entries, such as an inference server on the
+LAN. For path, method, credential, and TTL controls, use the companion
+`use-slicer-proxy` skill.
+
+Do not store reusable credentials or confidential inputs in the builder. Copy
+them into the runner after the fork, or keep them on the host and inject
+short-lived access through Slicer Proxy.
+
+## Concurrent platform workflows
+
+The daemon serialises commits which use the same cache key and rejects a
+different commit trying to claim an existing key. It does not prevent two
+callers from both performing builder setup after a simultaneous cache miss.
+Coordinate the initial build in the platform, then let all jobs reuse the
+winning commit.
+
+Forks can run concurrently. Capture each JSON response independently and use
+its `.hostname`; do not infer names or scan `vm list` for the newest VM.
+
+## Cleanup
+
+Runners are persistent and must be deleted explicitly:
+
+```bash
+slicer vm delete "$RUNNER"
+```
+
+The commit remains reusable. To remove the complete library entry, delete all
+forked children, delete the stopped source builder, then delete the commit:
+
+```bash
+SOURCE=$(slicer vm commit list \
+  --cache-key "$CACHE_KEY" \
+  --json | jq -r '.[0].source_hostname')
+slicer vm delete "$SOURCE"
+slicer vm commit delete "$COMMIT"
+```
+
+Deleting a commit while its source or children still depend on it is rejected.
+
+## Existing installations
+
+For the initial cold-forking release, refresh both the binary and locally
+cached guest images before testing:
+
+```bash
+sudo slicer update
+sudo slicer image wipe
+```
+
+Run the daemon from a fresh project directory, or remove stale `.lock` files
+from the existing project, so the updated guest agent is used. Do not delete
+disk images which contain data the user wants to keep.

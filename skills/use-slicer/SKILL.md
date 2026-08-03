@@ -1,6 +1,6 @@
 ---
 name: use-slicer
-description: Use Slicer to launch Linux microVMs for sandboxed builds, E2E tests, Docker, CI, and isolated dev environments — works from macOS and Linux hosts
+description: Use Slicer to launch, prepare, and cold-fork Linux microVMs for sandboxed builds, E2E tests, Docker, CI, and isolated dev environments — works from macOS and Linux hosts
 tools: [Bash]
 ---
 
@@ -15,6 +15,7 @@ Slicer gives you instant Linux microVMs powered by Firecracker. Use it when you 
 - Kubernetes (k3s) clusters for testing
 - GPU/PCI passthrough workloads (via cloud-hypervisor backend)
 - Automated code review pipelines in ephemeral microVMs
+- Preparing one builder VM, then cold-forking clean runners without repeating setup
 - Running coding agents in isolated microVMs (Amp, Claude Code, Codex, OpenCode, GitHub Copilot CLI) then copying out the outcome - code, files, reports, binaries, images, etc.
 
 VMs boot in 1–3 seconds, have full systemd, internet access, and SSH pre-installed.
@@ -36,6 +37,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/interactive-tui.md](references/interactive-tui.md) — driving interactive TUIs and coding agents (guest tmux via exec, or host tmux + vm shell)
 - [references/networking.md](references/networking.md) — bridge, isolated, and macvtap (LAN-direct) networking
 - [references/agent-sandboxes.md](references/agent-sandboxes.md) — coding-agent sandbox detail
+- [references/cold-forking.md](references/cold-forking.md) — cache a prepared builder and fork clean runners
 
 Companion skills: **`use-slicer-worktrees`** (git worktrees in a VM), **`use-slicer-proxy`** (filtered egress + secret injection).
 
@@ -64,8 +66,7 @@ WORKFLOW=ci-$(date +%Y%m%d-%H%M%S)
 if [ -n "${SLICER_SESSION_VM:-}" ]; then
   VM_NAME="$SLICER_SESSION_VM"
 else
-  VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {print $2; exit}')
-  slicer vm ready "$VM_NAME"
+  VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" --wait --json | jq -r '.hostname')
   export SLICER_SESSION_VM="$VM_NAME"
 fi
 
@@ -175,7 +176,7 @@ The hostname is printed on creation (e.g. `demo-3`). Key flags:
 | `--secrets secret1,secret2` | Allow access to named secrets |
 | `--persistent` | Keep VM state across daemon restarts/shutdowns (default `true`); pass `--persistent=false` for ephemeral |
 
-Important: do not use readiness flags on `slicer vm add`. If startup blocking or readiness is required, run `slicer vm ready <VM_NAME>` as a separate step.
+For automation, use `--wait --json` to return only after the guest agent is ready and capture `.hostname`. Use `--wait-userdata --json` when userdata must also finish before the command returns. `slicer vm ready <VM_NAME>` remains useful when a VM was launched asynchronously.
 
 When creating VMs for mutable tasks, do not target or reuse `slicer-1` on slicer-mac unless the user explicitly requests it. Reuse the session's tagged VM when known; otherwise create a new VM with explicit `--tag`.
 
@@ -447,6 +448,25 @@ slicer vm delete VM_NAME      # Remove VM
 slicer vm suspend VM_NAME     # Save state to disk (snapshot)
 slicer vm restore VM_NAME     # Restore from snapshot
 ```
+
+### Cold fork a prepared VM
+
+On a Linux Slicer host using Firecracker, prepare a persistent builder once,
+shut it down, commit its disk, then fork allocator-named runners:
+
+```bash
+slicer vm shutdown "$BUILDER"
+COMMIT=$(slicer vm commit "$BUILDER" --cache-key "$CACHE_KEY" --json | jq -r '.commit_id')
+RUNNER=$(slicer vm fork "$COMMIT" --tag "workflow=$WORKFLOW" --json | jq -r '.hostname')
+```
+
+Do not pass a child hostname to `vm fork`; Slicer allocates it. Cold forking
+is not yet available in Slicer for Mac. Per-fork `--allow`, `--no-allow`, and
+`--drop` rules require an isolated host group; bridge-mode forks inherit their
+host group's networking.
+
+For cache hits, no-egress runners, cleanup, and agent-safety notes, read
+[references/cold-forking.md](references/cold-forking.md).
 
 ### Monitoring
 
