@@ -30,6 +30,11 @@ slicer new demo --net isolated --allow "0.0.0.0/0" --drop "10.0.0.0/8"
 - Default isolated range: `169.254.100.0/22`
 - Best for: untrusted code execution, CI runners, sandboxes
 
+Cold forks may override `--allow`, `--no-allow`, and `--drop` only when their
+host group uses isolated networking. Cold forking also works in bridge mode,
+but the runner inherits the host-group network policy unchanged. Do not try to
+apply these flags to a bridge-mode fork.
+
 ### macOS (slicer-mac)
 
 - VMs **cannot** talk to each other
@@ -37,6 +42,7 @@ slicer new demo --net isolated --allow "0.0.0.0/0" --drop "10.0.0.0/8"
 - The `slicer` host group is a persistent Linux twin (survives reboots)
 - The `sbox` host group is for ephemeral API-launched sandboxes
 - Socket auto-detected at `~/slicer-mac/slicer.sock` — no `--url` needed
+- Cold commit and fork are not yet supported; suspend and restore are supported
 
 ### CIDR and host group conflicts
 

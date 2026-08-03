@@ -12,6 +12,7 @@ The Slicer CLI also works as a client for **Slicer for Mac**, which runs Linux m
 - **Auth**: disabled by default for the local socket — no `--token` needed.
 - **Networking**: VMNet — VMs cannot talk to each other, but the host can talk to VMs. Reach a VM's TCP ports by the IP shown in `slicer vm list`, or with `slicer vm forward` (SSH `-L` / `kubectl port-forward` style, for TCP and UNIX sockets).
 - **Install**: `slicer install slicer-mac ~/slicer-mac`
+- **Cold forking**: not yet supported. Slicer for Mac can suspend and restore a VM, but cannot commit its disk and fork children from it.
 
 ## Connecting
 

@@ -81,6 +81,17 @@ Creating a provision-only agent sandbox first and then pushing into it still wor
 
 A plain copy of a git worktree breaks: its `.git` is a *file* holding an absolute host path, so every git command in the VM fails. `slicer wt` stages a sanitised `.git` instead. See the **`use-slicer-worktrees`** skill for the full `slicer wt push` / `pull` / `list` reference.
 
+## Cold-forked agent bases
+
+On a Linux Firecracker host, cold forking can prepare compilers, linters,
+browsers, and agent binaries once, then create one runner per task. Do not put
+reusable agent credentials, repository credentials, customer data, or untrusted
+code into the committed builder: every child inherits its disk.
+
+Prefer copying credentials and code into each runner after the fork, or keep
+credentials on the host and use Slicer Proxy for narrowly scoped access. See
+[cold-forking.md](cold-forking.md) for the builder/cache/fork workflow.
+
 ## .slicerignore
 
 Place at workspace root. Same syntax as `.gitignore`. Controls what gets copied into the VM in workspace mode.
