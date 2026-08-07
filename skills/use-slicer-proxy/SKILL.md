@@ -1,7 +1,7 @@
 ---
 name: use-slicer-proxy
 description: Filter, audit, and inject secrets into HTTP(S) egress from Slicer microVMs with Slicer Proxy — default-deny allow rules, credential injection (Bearer, Basic, OAuth for Claude/Codex/Copilot/xAI), audit and passthrough modes — on Linux and macOS.
-tools: [Bash]
+allowed-tools: Bash
 ---
 
 # Slicer Proxy — filtered egress and secret injection for microVMs
@@ -81,7 +81,7 @@ macOS support differs enough that this skill defers the exact steps to the docs 
 
 Key differences from Linux:
 
-- **Two host groups.** `slicer` holds one long-lived VM — it can audit and inject secrets but **cannot block egress**. `sbox` holds ephemeral VMs and *can* be forced fully through the proxy.
+- **Two host groups.** `slicer` holds one long-lived VM — it can audit and inject secrets but **cannot block egress**. `sbox` holds on-demand sandbox VMs and *can* be forced fully through the proxy.
 - **Egress blocking is off by default.** Forcing traffic through the proxy is opt-in. Edit `~/slicer-mac/slicer-mac.yaml` on the `sbox` host group — set `ca: { generate: true }`, `network.dns_servers: ["127.0.0.1","127.0.0.1"]`, and `network.allow` / `network.drop` — then apply the host firewall rules with `sudo ~/slicer-mac/slicer-mac pf apply` (revert with `pf remove`). Without these edits `sbox` VMs keep full Internet access and the proxy only sees traffic that opts in. The docs page has the exact YAML diff.
 - **Fixed proxy IP.** macOS uses the NAT gateway `192.168.64.1` — it is not configurable as it is on Linux.
 - **Start flags.** Run `slicer proxy up` from `~/slicer-mac` with `--bind 0.0.0.0 --san 192.168.64.1 --seal-key-file ./.slicer/proxy/mk`; start Slicer with `slicer-mac up`.
