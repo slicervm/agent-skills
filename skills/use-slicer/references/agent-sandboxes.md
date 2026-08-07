@@ -22,7 +22,7 @@ The optional positional argument selects the base mode:
 |----------|------|-----------|
 | *(none)* | provision-only | Create VM, sync git identity, copy credentials, install the agent — then stop. No workspace copy, no attach. Mainly for advanced/manual flows. |
 | a local directory | workspace | As above, then copy the directory in (honours `.slicerignore`) and attach a session. |
-| anything else | reattach | Treat as an existing VM name; wait for the agent and reattach. |
+| anything else | reattach | Treat as an existing canonical hostname or friendly name; wait for the agent and reattach. |
 
 For git repositories, prefer `--worktree` / `--wt` instead of creating a provision-only sandbox and then running `slicer wt push`. Worktree mode provisions the VM, pushes a self-contained `.git`, installs the agent into that path, and attaches in one command.
 
@@ -55,7 +55,7 @@ For git repositories, prefer `--worktree` / `--wt` instead of creating a provisi
 
 ## Reattach to an existing VM
 
-Pass the VM name instead of a path:
+Pass the canonical hostname or friendly name instead of a path:
 
 ```bash
 slicer amp amp-1
@@ -66,6 +66,19 @@ slicer opencode opencode-1
 slicer pi pi-1
 slicer workspace workspace-1
 ```
+
+Assign a friendly name when creating a sandbox, then use it for reattach and
+other CLI commands:
+
+```bash
+slicer opencode --name papermaking
+slicer opencode papermaking
+slicer shell papermaking
+```
+
+`--name` is creation-time CLI sugar for the immutable `name=papermaking` tag.
+Do not combine it with `--tag name=...`. See
+[vm-names-and-tags.md](vm-names-and-tags.md) for the CLI/API boundary.
 
 ## Worktree workflow (recommended for git repos)
 
@@ -120,6 +133,7 @@ All agent commands share:
 | `--uid N` | UID for copy/exec/shell (default: auto-detect) |
 | `--timeout 5m` | Agent readiness timeout |
 | `--tmux none\|local\|remote` | Session mode (default `none`) |
+| `--name NAME` / `-n NAME` | Assign a unique friendly name when creating the VM |
 | `--tag key=value` | Metadata tags |
 | `--worktree` / `--wt` | Push a git worktree into the VM instead of tar-copying a directory |
 | `--rm` | Make the VM ephemeral; sandboxes are persistent by default |

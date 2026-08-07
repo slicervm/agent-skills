@@ -1,7 +1,7 @@
 ---
 name: use-k3sup
 description: Provision K3s clusters with k3sup and k3sup-pro on local, Slicer, and remote VMs.
-tools: [Bash]
+allowed-tools: Bash
 ---
 
 # Use K3sup with Slicer VMs

@@ -8,9 +8,9 @@ Worked recipes that combine the core `slicer vm` commands. Copy-paste starting p
 WORKFLOW=e2e-$(date +%Y%m%d-%H%M%S)
 VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
-slicer vm cp ./project/ "$VM_NAME":/home/ubuntu/project/ --uid 1000
+slicer cp -r ./project/ "$VM_NAME":/home/ubuntu/project/ --uid 1000
 slicer vm exec "$VM_NAME" --uid 1000 --cwd ~/project -- "npm install && npm test"
-slicer vm cp "$VM_NAME":/home/ubuntu/project/test-results/ ./results/
+slicer cp -r "$VM_NAME":/home/ubuntu/project/test-results/ ./results/
 slicer vm delete "$VM_NAME"
 ```
 
@@ -32,7 +32,7 @@ docker run -d -p 8080:8080 myapp
 WORKFLOW=build-$(date +%Y%m%d-%H%M%S)
 VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
-slicer vm cp ./myproject/ "$VM_NAME":/home/ubuntu/myproject/ --uid 1000
+slicer cp -r ./myproject/ "$VM_NAME":/home/ubuntu/myproject/ --uid 1000
 slicer vm exec "$VM_NAME" --uid 1000 --cwd ~/myproject -- "make build"
 slicer vm cp "$VM_NAME":/home/ubuntu/myproject/bin/app ./bin/app-linux
 slicer vm delete "$VM_NAME"

@@ -40,7 +40,7 @@ apply these flags to a bridge-mode fork.
 - VMs **cannot** talk to each other
 - VMs **can** talk to the macOS host
 - The `slicer` host group is a persistent Linux twin (survives reboots)
-- The `sbox` host group is for ephemeral API-launched sandboxes
+- The `sbox` host group is for on-demand sandbox VMs
 - Socket auto-detected at `~/slicer-mac/slicer.sock` — no `--url` needed
 - Cold commit and fork are not yet supported; suspend and restore are supported
 
@@ -81,7 +81,11 @@ slicer new homelab --net macvtap --cidr 192.168.1.1/24
 slicer new homelab --net macvtap
 ```
 
-- VMs appear as **first-class devices on the physical LAN** — switches, routers, and DHCP servers see each VM as a separate host with its own MAC and IP. No bridge, no NAT, no iptables, no port forwarding. The VM's default route is your LAN gateway.
+- VMs appear as **first-class devices on the physical LAN** — switches,
+  routers, and DHCP servers see each VM as a separate host with its own MAC
+  and IP. There is no bridge, NAT, or iptables-based forwarding. The VM's
+  default route is your LAN gateway; vsock-based `slicer vm forward` remains
+  available.
 - **Linux + Firecracker only.** Not supported on qemu, and not on the `--min` image (the DHCP helper isn't included there). macOS hosts use the slicer-mac modes instead.
 - **`--cidr` is the LAN gateway in CIDR form**, e.g. `192.168.1.1/24` — your home router, not a slicer-private range. The macvlan parent NIC is auto-detected from the host's egress adapter.
   - With `--address` you pin exact IPs.

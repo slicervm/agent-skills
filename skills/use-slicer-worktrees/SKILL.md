@@ -1,7 +1,7 @@
 ---
 name: use-slicer-worktrees
 description: Move a git worktree or repository into a Slicer microVM with a working, self-contained .git — prefer agent `--worktree` mode for coding sandboxes, use `slicer wt push` for manual VM flows, then pull commits back.
-tools: [Bash]
+allowed-tools: Bash
 ---
 
 # Slicer Worktrees — git worktrees and repos inside a microVM

@@ -1,7 +1,7 @@
 ---
 name: use-s3-rustfs
 description: Install and run RustFS (S3-compatible object storage in Rust) in a Slicer VM, and talk to it with any S3 client (boto3, aws-cli, mc)
-tools: [Bash]
+allowed-tools: Bash
 ---
 
 # Use S3 — RustFS in a Slicer VM
@@ -48,10 +48,11 @@ Service is now listening on port **9000** (S3 API) and **9001** (web console) in
 
 RustFS wants to bind privileged directories (`/data/rustfs0`, `/var/logs/rustfs`) and install a systemd unit. Running it inside a disposable Slicer VM keeps your host clean, lets you snapshot/reset the storage instantly, and matches production-like deployment.
 
-`slicer vm add` is persistent by default, it survives daemon restarts. Always launch with a descriptive `--tag`s so the VM can be rediscovered:
+`slicer vm add` is persistent by default, so it survives daemon restarts. Always launch with descriptive `--tag` values so the VM can be rediscovered:
 
 ```bash
-slicer vm list --json | jq -r '.[] | select(.tags.workflow=="rustfs") | .hostname'
+slicer vm list --json \
+  | jq -r '.[] | select(any(.tags[]?; . == "workflow=rustfs")) | .hostname'
 ```
 
 On slicer-mac use the `sbox` host group explicitly. On Slicer for Linux, list groups first (`slicer vm group`) or omit the positional to use the default.
