@@ -33,7 +33,7 @@ slicer vm ready "$VM_NAME"
 slicer vm exec "$VM_NAME" --uid 1000 -- "uname -a"
 
 # Ephemeral sandbox
-VM_NAME=$(slicer vm add sbox --rm | awk '/Hostname:/ {print $2; exit}')
+VM_NAME=$(slicer vm add sbox --persistent=false | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
 slicer vm exec "$VM_NAME" --uid 1000 -- "make test"
 slicer vm delete "$VM_NAME"
