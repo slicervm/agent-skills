@@ -1,6 +1,7 @@
 # Slicer Agent Skills
 
-[Agent Skills](https://agentskills.io/) for [Slicer](https://slicervm.com) — instant Linux microVMs powered by Firecracker.
+[Agent Skills](https://agentskills.io/) for [Slicer](https://slicervm.com) —
+instant Linux microVMs on Linux and macOS.
 
 Teach your AI coding agent how to launch, manage, and work with Slicer microVMs for sandboxed builds, E2E tests, Docker workflows, CI, and isolated dev environments.
 

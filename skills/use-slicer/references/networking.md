@@ -42,7 +42,9 @@ apply these flags to a bridge-mode fork.
 - The `slicer` host group is a persistent Linux twin (survives reboots)
 - The `sbox` host group is for on-demand sandbox VMs
 - Socket auto-detected at `~/slicer-mac/slicer.sock` — no `--url` needed
-- Cold commit and fork are not yet supported; suspend and restore are supported
+- Cold commit and fork are supported for `sbox` VMs, but Apple VZ networking
+  does not support the Linux per-fork `--allow`, `--no-allow`, or `--drop`
+  overrides
 
 ### CIDR and host group conflicts
 

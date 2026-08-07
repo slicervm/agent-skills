@@ -96,10 +96,11 @@ A plain copy of a git worktree breaks: its `.git` is a *file* holding an absolut
 
 ## Cold-forked agent bases
 
-On a Linux Firecracker host, cold forking can prepare compilers, linters,
-browsers, and agent binaries once, then create one runner per task. Do not put
-reusable agent credentials, repository credentials, customer data, or untrusted
-code into the committed builder: every child inherits its disk.
+Cold forking can prepare compilers, linters, browsers, and agent binaries once,
+then create one runner per task. It works with Firecracker host groups on Linux
+and the `sbox` host group in Slicer for Mac. Do not put reusable agent
+credentials, repository credentials, customer data, or untrusted code into the
+committed builder: every child inherits its disk.
 
 Prefer copying credentials and code into each runner after the fork, or keep
 credentials on the host and use Slicer Proxy for narrowly scoped access. See

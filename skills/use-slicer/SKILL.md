@@ -6,7 +6,8 @@ allowed-tools: Bash
 
 # Use Slicer — Launch Linux MicroVMs
 
-Slicer gives you instant Linux microVMs powered by Firecracker. Use it when you need:
+Slicer gives you instant Linux microVMs through Firecracker on Linux and Apple
+Virtualization on macOS. Use it when you need:
 
 - A real Linux environment with systemd, Internet access, and SSH preinstalled (especially from macOS)
 - Sandboxed builds, CI, or E2E tests
@@ -423,8 +424,8 @@ slicer vm restore VM_NAME     # Restore from snapshot
 
 ### Cold fork a prepared VM
 
-On a Linux Slicer host using Firecracker, prepare a persistent builder once,
-shut it down, commit its disk, then fork allocator-named runners:
+Prepare a persistent builder once, shut it down, commit its disk, then fork
+allocator-named runners. On macOS, use the `sbox` host group:
 
 ```bash
 slicer vm shutdown "$BUILDER"
@@ -432,10 +433,11 @@ COMMIT=$(slicer vm commit "$BUILDER" --cache-key "$CACHE_KEY" --json | jq -r '.c
 RUNNER=$(slicer vm fork "$COMMIT" --tag "workflow=$WORKFLOW" --json | jq -r '.hostname')
 ```
 
-Do not pass a child hostname to `vm fork`; Slicer allocates it. Cold forking
-is not yet available in Slicer for Mac. Per-fork `--allow`, `--no-allow`, and
-`--drop` rules require an isolated host group; bridge-mode forks inherit their
-host group's networking.
+Do not pass a child hostname to `vm fork`; Slicer allocates it. The same CLI
+and SDK workflow works with Slicer for Mac. macOS forks are disk-only APFS
+clones of `sbox` VMs and do not accept per-fork network overrides. On Linux,
+`--allow`, `--no-allow`, and `--drop` require an isolated host group;
+bridge-mode forks inherit their host group's networking.
 
 For cache hits, no-egress runners, cleanup, and agent-safety notes, read
 [references/cold-forking.md](references/cold-forking.md).
