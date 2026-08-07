@@ -6,19 +6,21 @@ or every job should start from the same known state.
 
 ## Requirements and boundaries
 
-Cold forking currently requires:
+Cold forking requires a stopped, persistent source VM. The backend-specific
+boundaries are:
 
-- a Linux Slicer daemon using Firecracker
-- `image`, `devmapper`, or `zvol` storage
-- a stopped, persistent source VM
-- bridge or isolated networking
+- Linux uses Firecracker with `image`, `devmapper`, or `zvol` storage. Bridge
+  and isolated networking are supported.
+- Slicer for Mac uses APFS copy-on-write disk clones and supports the `sbox`
+  host group only.
 
-It is not yet available in Slicer for Mac. Slicer for Mac supports suspend and
-restore, but cannot commit and fork a VM. Cold forking is also different from
-suspend/restore: only disk state is reused; processes, sockets, and RAM are not.
+Cold forking is different from suspend/restore: only disk state is reused;
+processes, sockets, and RAM are not.
 
-Bridge-mode forks work, but inherit their host-group networking. Per-fork
+On Linux, bridge-mode forks inherit their host-group networking. Per-fork
 `--allow`, `--no-allow`, and `--drop` rules require isolated networking.
+Slicer for Mac uses Apple VZ networking and rejects per-fork network
+overrides.
 
 ## Terms
 
@@ -32,8 +34,9 @@ workflow identity.
 
 ## Agent-safe workflow
 
-Use JSON for every value consumed by automation. Pick an existing Firecracker
-host group, then look for a cached builder before doing any setup:
+Use JSON for every value consumed by automation. Pick a host group which
+supports cold forks (`sbox` on macOS), then look for a cached builder before
+doing any setup:
 
 ```bash
 GROUP=runners
@@ -146,7 +149,7 @@ slicer vm commit delete "$COMMIT"
 
 Deleting a commit while its source or children still depend on it is rejected.
 
-## Existing installations
+## Existing Linux installations
 
 For the initial cold-forking release, refresh both the binary and locally
 cached guest images before testing:
