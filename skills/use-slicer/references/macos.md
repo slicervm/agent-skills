@@ -82,11 +82,18 @@ RUNNER=$(slicer vm fork "$COMMIT" --wait --json | jq -r '.hostname')
 
 The shared CLI and SDK contract includes cache keys, tags, identity fixups,
 secret filtering, persistent or ephemeral children, waits, and CPU/RAM
-overrides. The macOS backend is disk-only, supports `sbox` only, and rejects
-the Linux-only per-fork `--allow`, `--no-allow`, and `--drop` network
-overrides. See [cold-forking.md](cold-forking.md) for cleanup and cache
+overrides. The macOS backend is disk-only and supports `sbox` only.
+
+Network allow/drop settings apply to every `sbox` VM, so macOS does not accept
+the Linux per-fork `--allow`, `--no-allow`, and `--drop` overrides. Force the
+host group through Slicer Proxy, use an open client while preparing a hot
+builder, and give each cold-forked runner a different default-deny or
+restricted client. Never commit the hot client token into the builder disk.
+See [cold-forking.md](cold-forking.md) for cleanup, cache, and proxy-client
 guidance.
 
 ## Slicer Proxy on macOS
 
-For filtered egress and secret injection, see the `use-slicer-proxy` skill — note that on macOS egress blocking is off by default and requires edits to `slicer-mac.yaml`.
+For filtered egress and secret injection, see the `use-slicer-proxy` skill.
+On macOS, egress blocking is off by default and requires edits to
+`slicer-mac.yaml`; those settings apply to the complete `sbox` host group.

@@ -45,6 +45,10 @@ apply these flags to a bridge-mode fork.
 - Cold commit and fork are supported for `sbox` VMs, but Apple VZ networking
   does not support the Linux per-fork `--allow`, `--no-allow`, or `--drop`
   overrides
+- The slicer-mac allow/drop configuration applies to every `sbox` VM. For a
+  hot builder and a restricted cold fork, force `sbox` through Slicer Proxy
+  and assign different proxy clients: broad rules for the builder and no or
+  narrowly scoped rules for the runner
 
 ### CIDR and host group conflicts
 
