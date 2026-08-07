@@ -117,23 +117,51 @@ LAN. For path, method, credential, and TTL controls, use the companion
 `use-slicer-proxy` skill.
 
 On macOS, first configure the whole `sbox` host group so Slicer Proxy is its
-only egress path. Then use different proxy clients for the two phases:
+only egress path. Use this order instead of the generic builder preparation
+above:
 
 ```bash
+BUILDER=$(slicer vm add sbox \
+  --persistent \
+  --tag "workflow=$WORKFLOW" \
+  --tag role=builder \
+  --wait \
+  --json | jq -r '.hostname')
+
 HOT_CLIENT="builder-$BUILDER"
 HOT_TOKEN=$(slicer proxy client create "$HOT_CLIENT")
 slicer proxy allow "$HOT_CLIENT" --host '*'
+
+slicer vm exec \
+  --uid 0 \
+  --env HTTP_PROXY="http://:$HOT_TOKEN@192.168.64.1:3128" \
+  --env HTTPS_PROXY="https://proxy:$HOT_TOKEN@192.168.64.1:3129" \
+  "$BUILDER" -- "arkade system install go"
+
+slicer proxy client delete "$HOT_CLIENT"
+slicer vm shutdown "$BUILDER"
+COMMIT=$(slicer vm commit "$BUILDER" \
+  --cache-key "$CACHE_KEY" \
+  --tag "workflow=$WORKFLOW" \
+  --json | jq -r '.commit_id')
+
+RUNNER=$(slicer vm fork "$COMMIT" \
+  --tag "workflow=$WORKFLOW" \
+  --tag role=runner \
+  --wait \
+  --json | jq -r '.hostname')
 
 COLD_CLIENT="runner-$RUNNER"
 COLD_TOKEN=$(slicer proxy client create "$COLD_CLIENT")
 # No runner rules means default-deny; add only required destinations.
 ```
 
-Pass `HOT_TOKEN` only while preparing the builder. Do not install it into the
-builder disk before committing, because every fork inherits that disk. Give
-the fork `COLD_TOKEN` after launch, either per command or through the guest
-proxy helper. A client with no allow rules is fully denied; a client with a
-small rule set is a restricted profile. Use a unique client per VM so audit,
+Pass `HOT_TOKEN` only as an environment value while preparing the builder.
+Do not install it into the builder disk before committing, because every fork
+inherits that disk. Delete the hot client when preparation finishes. Give the
+fork `COLD_TOKEN` after launch, either per command or through the guest proxy
+helper. A client with no allow rules is fully denied; a client with a small
+rule set is a restricted profile. Use a unique client per VM so audit,
 revocation, and policy remain isolated. The host-group firewall remains the
 same for every `sbox` VM—the client token selects policy at Slicer Proxy.
 
