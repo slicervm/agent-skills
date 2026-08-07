@@ -435,7 +435,9 @@ RUNNER=$(slicer vm fork "$COMMIT" --tag "workflow=$WORKFLOW" --json | jq -r '.ho
 
 Do not pass a child hostname to `vm fork`; Slicer allocates it. The same CLI
 and SDK workflow works with Slicer for Mac. macOS forks are disk-only APFS
-clones of `sbox` VMs and do not accept per-fork network overrides. On Linux,
+clones of `sbox` VMs. Network allow/drop settings apply to the whole macOS
+`sbox` host group, so give hot builders and restricted runners different
+Slicer Proxy clients; do not rely on per-fork network overrides. On Linux,
 `--allow`, `--no-allow`, and `--drop` require an isolated host group;
 bridge-mode forks inherit their host group's networking.
 

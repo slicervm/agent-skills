@@ -19,8 +19,10 @@ processes, sockets, and RAM are not.
 
 On Linux, bridge-mode forks inherit their host-group networking. Per-fork
 `--allow`, `--no-allow`, and `--drop` rules require isolated networking.
-Slicer for Mac uses Apple VZ networking and rejects per-fork network
-overrides.
+Slicer for Mac uses Apple VZ networking, and its allow/drop configuration
+applies to every VM in the `sbox` host group. It rejects per-fork network
+overrides. Use separate Slicer Proxy clients to distinguish a hot builder from
+a restricted runner.
 
 ## Terms
 
@@ -97,7 +99,7 @@ not use SSH host-key presence as a generic identity check.
 
 ## Fork with no egress
 
-Only use these flags with an isolated host group:
+On Linux, only use these flags with an isolated host group:
 
 ```bash
 RUNNER=$(slicer vm fork "$COMMIT" \
@@ -112,6 +114,24 @@ The DROP is applied outside the guest. For partial access, replace the empty
 allow list with explicit `--allow` entries, such as an inference server on the
 LAN. For path, method, credential, and TTL controls, use the companion
 `use-slicer-proxy` skill.
+
+On macOS, first configure the whole `sbox` host group so Slicer Proxy is its
+only egress path. Then use different proxy clients for the two phases:
+
+```bash
+HOT_TOKEN=$(slicer proxy client create builder-hot)
+slicer proxy allow builder-hot --host '*'
+
+COLD_TOKEN=$(slicer proxy client create runner-cold)
+# No runner-cold rules means default-deny; add only required destinations.
+```
+
+Pass `HOT_TOKEN` only while preparing the builder. Do not install it into the
+builder disk before committing, because every fork inherits that disk. Give
+the fork `COLD_TOKEN` after launch, either per command or through the guest
+proxy helper. A client with no allow rules is fully denied; a client with a
+small rule set is a restricted profile. The host-group firewall remains the
+same for every `sbox` VM—the client token selects policy at Slicer Proxy.
 
 Do not store reusable credentials or confidential inputs in the builder. Copy
 them into the runner after the fork, or keep them on the host and inject

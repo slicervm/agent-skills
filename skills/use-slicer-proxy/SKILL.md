@@ -82,11 +82,17 @@ macOS support differs enough that this skill defers the exact steps to the docs 
 Key differences from Linux:
 
 - **Two host groups.** `slicer` holds one long-lived VM — it can audit and inject secrets but **cannot block egress**. `sbox` holds on-demand sandbox VMs and *can* be forced fully through the proxy.
-- **Egress blocking is off by default.** Forcing traffic through the proxy is opt-in. Edit `~/slicer-mac/slicer-mac.yaml` on the `sbox` host group — set `ca: { generate: true }`, `network.dns_servers: ["127.0.0.1","127.0.0.1"]`, and `network.allow` / `network.drop` — then apply the host firewall rules with `sudo ~/slicer-mac/slicer-mac pf apply` (revert with `pf remove`). Without these edits `sbox` VMs keep full Internet access and the proxy only sees traffic that opts in. The docs page has the exact YAML diff.
+- **Egress blocking is off by default.** Forcing traffic through the proxy is opt-in. Edit `~/slicer-mac/slicer-mac.yaml` on the `sbox` host group — set `ca: { generate: true }`, `network.dns_servers: ["127.0.0.1","127.0.0.1"]`, and `network.allow` / `network.drop` — then apply the host firewall rules with `sudo ~/slicer-mac/slicer-mac pf apply` (revert with `pf remove`). Without these edits `sbox` VMs keep full Internet access and the proxy only sees traffic that opts in. These network settings apply to every `sbox` VM; use separate proxy clients and rules when individual VMs need different policies. The docs page has the exact YAML diff.
 - **Fixed proxy IP.** macOS uses the NAT gateway `192.168.64.1` — it is not configurable as it is on Linux.
 - **Start flags.** Run `slicer proxy up` from `~/slicer-mac` with `--bind 0.0.0.0 --san 192.168.64.1 --seal-key-file ./.slicer/proxy/mk`; start Slicer with `slicer-mac up`.
 
 Once set up, the client / secret / allow-rule workflow below is identical to Linux — use `192.168.64.1` as the proxy IP and drop `sudo` from the `slicer` commands.
+
+For a cold-fork workflow, use an open client only while preparing the hot
+builder, then use a separate default-deny or restricted client for each cold
+runner. Do not bake the builder client token into the committed disk. macOS
+cannot vary host firewall rules per fork as Linux can with an isolated network
+namespace; the proxy client token is the per-VM policy selector.
 
 ## Core workflow
 
