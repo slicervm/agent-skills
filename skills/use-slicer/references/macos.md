@@ -68,7 +68,9 @@ Do not target or reuse `slicer-1` for mutable tasks unless the user explicitly a
 ## Cold forking `sbox` VMs
 
 Prepare and stop a persistent `sbox` VM, commit it, then fork independent APFS
-copy-on-write children:
+copy-on-write children. This minimal example assumes ordinary `sbox` egress;
+when the host group is forced through Slicer Proxy, use the ordered hot/cold
+client recipe in [cold-forking.md](cold-forking.md) instead:
 
 ```bash
 BUILDER=$(slicer vm add sbox --persistent --wait --json |
