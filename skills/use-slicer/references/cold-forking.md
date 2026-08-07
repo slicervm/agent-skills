@@ -41,7 +41,8 @@ supports cold forks (`sbox` on macOS), then look for a cached builder before
 doing any setup:
 
 ```bash
-GROUP=runners
+# Slicer for Mac. On Linux, replace this with an existing Firecracker group.
+GROUP=sbox
 WORKFLOW=cold-fork-arkade
 CACHE_KEY=arkade-go-v1
 
