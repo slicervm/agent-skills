@@ -120,18 +120,21 @@ On macOS, first configure the whole `sbox` host group so Slicer Proxy is its
 only egress path. Then use different proxy clients for the two phases:
 
 ```bash
-HOT_TOKEN=$(slicer proxy client create builder-hot)
-slicer proxy allow builder-hot --host '*'
+HOT_CLIENT="builder-$BUILDER"
+HOT_TOKEN=$(slicer proxy client create "$HOT_CLIENT")
+slicer proxy allow "$HOT_CLIENT" --host '*'
 
-COLD_TOKEN=$(slicer proxy client create runner-cold)
-# No runner-cold rules means default-deny; add only required destinations.
+COLD_CLIENT="runner-$RUNNER"
+COLD_TOKEN=$(slicer proxy client create "$COLD_CLIENT")
+# No runner rules means default-deny; add only required destinations.
 ```
 
 Pass `HOT_TOKEN` only while preparing the builder. Do not install it into the
 builder disk before committing, because every fork inherits that disk. Give
 the fork `COLD_TOKEN` after launch, either per command or through the guest
 proxy helper. A client with no allow rules is fully denied; a client with a
-small rule set is a restricted profile. The host-group firewall remains the
+small rule set is a restricted profile. Use a unique client per VM so audit,
+revocation, and policy remain isolated. The host-group firewall remains the
 same for every `sbox` VM—the client token selects policy at Slicer Proxy.
 
 Do not store reusable credentials or confidential inputs in the builder. Copy
