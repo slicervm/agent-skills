@@ -47,6 +47,12 @@ name. The CLI first sends the supplied identifier unchanged. Only after a 404
 does it query for the exact `name=<identifier>` tag and retry with the returned
 canonical hostname.
 
+In Slicer CLI 0.1.210, `slicer vm bg kill` is the known exception: its explicit
+VM argument is sent directly without the fallback. Pass the canonical hostname
+returned at launch for `bg kill`; the other `bg` management commands accept the
+friendly name. Treat this as a temporary CLI consistency defect, not a reason
+to add name resolution to the API or SDK.
+
 Keep this direct-first behaviour when extending the CLI. Do not add server-side
 alias middleware, an `/alias` or `/name` route, a `name` request field, or an
 SDK-level name primitive.
@@ -93,7 +99,10 @@ GET /vm/sbox-4
 Require exactly one exact tag match. In Go, use `ListVMs` with
 `sdk.ListOptions{Tag: "name=papermaking"}`, then pass the returned `Hostname`
 to VM methods. Use `UpdateVMTags`, `AddVMTags`, `RemoveVMTags`, or
-`ReplaceVMTags` for mutable metadata. In TypeScript, use `VM.getTags()`,
+`ReplaceVMTags` for mutable metadata. When replacing tags, omit the immutable
+`name=` tag from the replacement; the server preserves it. Supplying even the
+same `name=` value in a replacement is rejected as an attempted rename. In
+TypeScript, use `VM.getTags()`,
 `updateTags()`, `addTags()`, `removeTags()`, and `replaceTags()` on a handle
 attached by canonical hostname.
 

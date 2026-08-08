@@ -81,6 +81,25 @@ echo $! | sudo tee /run/slicer.pid
 export SLICER_URL=/tmp/slicer-sandbox.sock
 ```
 
+### Verify a newly published guest agent
+
+For version-sensitive guest-agent testing, use a fresh daemon working
+directory and do not trust an existing image lock, VM disk, or daemon process.
+Before starting the test daemon:
+
+1. Stop only the daemon started for the test.
+2. Remove that test directory's generated image `.lock` file and old `.img`
+   disks.
+3. With explicit user permission, run `sudo slicer image wipe`; this clears the
+   host-wide image cache and may affect other Slicer projects on the host.
+4. Start the freshly built daemon so it pulls and locks the current published
+   image.
+5. Launch a new VM and record `slicer vm health VM --json`; do not assess guest
+   compatibility until `agent_version` is the expected published version.
+
+Updating only the host binary cannot update an agent already embedded in a
+cached image or persistent VM disk.
+
 The plain foreground form is just:
 
 ```bash
@@ -113,7 +132,7 @@ sudo slicer service generate --install \
 sudo journalctl -u slicer-k3s -f --output=cat      # follow logs
 ```
 
-**Why a dedicated directory.** In `storage: image` mode Slicer creates each VM's `.img` disk and the daemon's `.slicer/` state relative to `WorkingDirectory`. Pointing it at `/root/k3s` keeps everything for that daemon in one place — `slicer.yaml` alongside `k3s-1.img`, `k3s-2.img`, … (and the `.img` files for any other host groups the config defines) — so the daemon's whole footprint is a single directory you can size, back up, or delete as a unit. Choose a path with enough free space (not `/`). `storage: zvol` / `devmapper` keep disks in their pools instead, so the directory then only holds config and `.slicer/` state.
+**Why a dedicated directory.** In `storage: image` mode Slicer creates each VM's `.img` disk and the daemon's `.slicer/` state relative to `WorkingDirectory`. Pointing it at `/root/k3s` keeps everything for that daemon in one place — `slicer.yaml` alongside `k3s-1.img`, `k3s-2.img`, … (and the `.img` files for any other host groups the config defines) — so the daemon's whole footprint is a single directory you can size, back up, or delete as a unit. Choose a path with enough free space (not `/`). `storage: zfs` / `devmapper` keep disks in their pools instead, so the directory then only holds config and `.slicer/` state.
 
 **License — point the unit at the real file, don't copy it.** `slicer service generate --install` writes an explicit `--license-file` into `ExecStart`. When run through `sudo`, it resolves the invoking user's `~/.slicer/LICENSE`; with `--user`, it resolves that user's license instead. Pass `--license-file` when you need a specific path.
 

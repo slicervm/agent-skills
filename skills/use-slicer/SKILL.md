@@ -358,9 +358,13 @@ slicer vm bg list   VM_NAME                     # list running + exited
 slicer vm bg info   VM_NAME "$EX"               # JSON status of one exec
 slicer vm bg logs   VM_NAME "$EX"               # dump ring buffer (--follow to stream)
 slicer vm bg wait   VM_NAME "$EX" --timeout 10m # block until exit
-slicer vm bg kill   VM_NAME "$EX"               # SIGTERM (→ SIGKILL after 5s)
-slicer vm bg remove VM_NAME "$EX"               # free buffer — always do when done
+slicer vm bg kill   CANONICAL_HOSTNAME "$EX"     # SIGTERM (→ SIGKILL after 5s)
+slicer vm bg remove VM_NAME "$EX"               # only after exit; frees the control record
 ```
+
+In CLI 0.1.210, `bg kill` is the one background subcommand that still requires
+the canonical hostname. `bg remove` does not kill a live child: kill and wait
+before removing it, or the process continues without a control handle.
 
 Key flags: `--uid`, `--cwd`, `--env KEY=VALUE`, `--ring-bytes 4M` (buffer cap, default 1M), `--follow`, `--json`. If binary not on `$PATH`, use full path: `-- /usr/local/bin/nats-server -p 4222`.
 
@@ -545,7 +549,7 @@ slicer activate         # Legacy command for GitHub Sponsors and for trial users
 2. **First boot pulls image**: may take 30–60s on first run; subsequent boots are 1–3s.
 3. **Port forwards block**: run them in background with `&`.
 4. **Internet access**: VMs have outbound internet by default (bridge mode).
-5. **Storage modes**: `image` (persistent, default), `devmapper`, `zvol`.
+5. **Storage modes**: `image` (persistent, default), `devmapper`, `zfs`.
 6. **Userdata runs once**: guarded by `/etc/slicer/userdata-ran` in the guest. Delete `.img` + `.lock` files to reset.
 7. **.slicerignore**: place at workspace root to skip files during `slicer workspace/amp/claude/codex` copies.
 
