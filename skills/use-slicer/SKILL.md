@@ -346,7 +346,8 @@ slicer vm bg exec VM_NAME --uid 1000 --shell=/bin/bash -- "cd /app && exec npm r
 **Capture exec_id** for later management:
 
 ```bash
-EX=$(slicer vm bg exec VM_NAME --uid 1000 --cwd /home/ubuntu/app \
+VM_HOSTNAME=dev-1 # canonical hostname returned by launch
+EX=$(slicer vm bg exec "$VM_HOSTNAME" --uid 1000 --cwd /home/ubuntu/app \
      -- npm run dev \
      | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
 ```
@@ -354,12 +355,12 @@ EX=$(slicer vm bg exec VM_NAME --uid 1000 --cwd /home/ubuntu/app \
 **Management subcommands:**
 
 ```bash
-slicer vm bg list   VM_NAME                     # list running + exited
-slicer vm bg info   VM_NAME "$EX"               # JSON status of one exec
-slicer vm bg logs   VM_NAME "$EX"               # dump ring buffer (--follow to stream)
-slicer vm bg wait   VM_NAME "$EX" --timeout 10m # block until exit
-slicer vm bg kill   CANONICAL_HOSTNAME "$EX"     # SIGTERM (→ SIGKILL after 5s)
-slicer vm bg remove VM_NAME "$EX"               # only after exit; frees the control record
+slicer vm bg list   "$VM_HOSTNAME"                     # list running + exited
+slicer vm bg info   "$VM_HOSTNAME" "$EX"               # JSON status of one exec
+slicer vm bg logs   "$VM_HOSTNAME" "$EX"               # dump ring buffer (--follow to stream)
+slicer vm bg wait   "$VM_HOSTNAME" "$EX" --timeout 10m # block until exit
+slicer vm bg kill   "$VM_HOSTNAME" "$EX"               # SIGTERM (→ SIGKILL after 5s)
+slicer vm bg remove "$VM_HOSTNAME" "$EX"               # only after exit; frees the control record
 ```
 
 In CLI 0.1.210, `bg kill` is the one background subcommand that still requires
