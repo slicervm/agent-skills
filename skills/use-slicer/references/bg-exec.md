@@ -36,23 +36,23 @@
 ## Example: dev server with port forward
 
 ```bash
-VM_NAME=dev-1
+VM_HOSTNAME=dev-1
 
 # Start the dev server in background (explicit form — preferred for agents)
-EX=$(slicer vm bg exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu/app \
+EX=$(slicer vm bg exec "$VM_HOSTNAME" --uid 1000 --cwd /home/ubuntu/app \
      -c npm -a run -a dev \
      | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
 
 # Port-forward to access it from the host
-slicer vm forward "$VM_NAME" -L 3000:127.0.0.1:3000 &
+slicer vm forward "$VM_HOSTNAME" -L 3000:127.0.0.1:3000 &
 
 # Check logs later
-slicer vm bg logs "$VM_NAME" "$EX" --follow
+slicer vm bg logs "$VM_HOSTNAME" "$EX" --follow
 
 # When done, stop and clean up
-slicer vm bg kill "$CANONICAL_VM_HOSTNAME" "$EX"
-slicer vm bg wait "$VM_NAME" "$EX" --timeout 10s
-slicer vm bg remove "$VM_NAME" "$EX"
+slicer vm bg kill "$VM_HOSTNAME" "$EX"
+slicer vm bg wait "$VM_HOSTNAME" "$EX" --timeout 10s
+slicer vm bg remove "$VM_HOSTNAME" "$EX"
 ```
 
 Slicer CLI 0.1.210 requires the canonical hostname for `bg kill`; its other
