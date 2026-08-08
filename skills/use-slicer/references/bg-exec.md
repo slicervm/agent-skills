@@ -21,6 +21,9 @@
 - Bump with `--ring-bytes 4M` for verbose builds (e.g. `docker buildx`).
 - When full, oldest frames are evicted. Reconnecting readers see a `type=gap` frame before output resumes.
 - Buffer lives until explicit `slicer vm bg remove`. After reap, calls return `410 Gone`.
+  `remove` does not stop a running child: check `bg info` or `bg wait`, and kill
+  it first when necessary. Removing a live entry discards the control handle
+  while the process continues in the guest.
 - Agent-wide cap: 256 MiB across all background execs. Exceeding it returns `503`.
 
 ## Additional notes
@@ -47,9 +50,14 @@ slicer vm forward "$VM_NAME" -L 3000:127.0.0.1:3000 &
 slicer vm bg logs "$VM_NAME" "$EX" --follow
 
 # When done, stop and clean up
-slicer vm bg kill "$VM_NAME" "$EX"
+slicer vm bg kill "$CANONICAL_VM_HOSTNAME" "$EX"
+slicer vm bg wait "$VM_NAME" "$EX" --timeout 10s
 slicer vm bg remove "$VM_NAME" "$EX"
 ```
+
+Slicer CLI 0.1.210 requires the canonical hostname for `bg kill`; its other
+background management commands accept a friendly name. Keep canonical
+hostnames returned by launch for lifecycle and cleanup operations.
 
 ## Example: long-running build
 

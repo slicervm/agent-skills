@@ -9,7 +9,7 @@ or every job should start from the same known state.
 Cold forking requires a stopped, persistent source VM. The backend-specific
 boundaries are:
 
-- Linux uses Firecracker with `image`, `devmapper`, or `zvol` storage. Bridge
+- Linux uses Firecracker with `image`, `devmapper`, or `zfs` storage. Bridge
   and isolated networking are supported.
 - Slicer for Mac uses APFS copy-on-write disk clones and supports the `sbox`
   host group only.
