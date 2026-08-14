@@ -39,6 +39,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/interactive-tui.md](references/interactive-tui.md) — driving interactive TUIs and coding agents (guest tmux via exec, or host tmux + vm shell)
 - [references/networking.md](references/networking.md) — bridge, isolated, and macvtap (LAN-direct) networking
 - [references/headless-browser.md](references/headless-browser.md) — render post-JavaScript DOM and screenshots with a lean, real browser inside a VM
+- [references/headless-x11.md](references/headless-x11.md) — run X11 applications headlessly with Xvfb and capture terminal video with ffmpeg (Slicer for Mac and Slicer for Linux)
 - [references/vm-names-and-tags.md](references/vm-names-and-tags.md) — friendly CLI names, canonical hostnames, mutable tags, and raw API lookup
 - [references/agent-sandboxes.md](references/agent-sandboxes.md) — coding-agent sandbox detail
 - [references/cold-forking.md](references/cold-forking.md) — cache a prepared builder and fork clean runners
