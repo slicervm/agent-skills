@@ -57,6 +57,19 @@ the remote source basename:
 slicer vm cp VM_NAME:~/papermaking-guide.html .
 ```
 
+## Updating a binary in a VM
+
+A running binary cannot be overwritten in place — `vm cp` to the live path can
+fail. Copy to a temp name, then move it into place:
+
+```bash
+slicer vm cp ./superterm VM_NAME:/home/ubuntu/superterm.new --uid 1000
+slicer vm exec VM_NAME -- "mv /home/ubuntu/superterm.new /home/ubuntu/superterm && chmod +x /home/ubuntu/superterm"
+```
+
+This also avoids partially-written files and works whether or not the target is
+currently executing.
+
 ## Directories
 
 Always pass `-r` / `--recursive` for a directory in either direction:

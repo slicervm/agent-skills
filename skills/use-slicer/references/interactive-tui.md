@@ -79,6 +79,17 @@ host pane (Pattern B).
   or terminator is delayed, truncated, or lands in the wrong pane. If that has
   happened, send `C-c`, confirm the normal prompt has returned, and switch to
   local staging plus `vm cp`.
+- **Clear the input line before sending fresh text into a TUI composer.**
+  A TUI (opencode, Claude Code) keeps whatever was typed into its input box,
+  so a garbled retry piles onto the old text and gets pasted mid-composer.
+  Send `C-u` (clear-line) first, then the prompt: `tmux send-keys -t agent C-u`,
+  then `tmux send-keys -t agent 'New prompt' Enter`. Do the same after a failed
+  or mangled attempt — the stale text is still sitting in the buffer.
+- **Quote the prompt for the guest's shell, not the TUI.** `send-keys` text is
+  also a target for the agent's own shell (opencode wraps input in
+  `eval`/`sh -c`), so an unbalanced quote in your prompt can fail the run with
+  a `syntax error` even though the TUI itself accepted it. Prefer single
+  quotes in the prompt body over nested double quotes.
 - Typical use: SDET-style testing of TUIs and coding agents — send a prompt,
   capture the screen, assert on what it shows, all from an orchestrating
   agent.
