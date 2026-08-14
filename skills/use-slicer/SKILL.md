@@ -306,6 +306,25 @@ cat script.sh | slicer vm exec VM_NAME -- "bash"
 slicer vm exec VM_NAME -- "ps aux | grep nginx"
 ```
 
+### Create scripts and configuration files safely
+
+Create multi-line scripts and configuration files locally, then copy them into
+the VM. Do not construct them with an interactive heredoc or one tmux
+`send-keys` call at a time.
+
+```bash
+# Create or edit setup.sh locally using the agent's normal file-editing tool.
+slicer vm cp ./setup.sh VM_NAME:/home/ubuntu/setup.sh \
+  --uid 1000 --permissions 0755
+slicer vm exec VM_NAME --uid 1000 --shell="" -- \
+  /bin/bash -n /home/ubuntu/setup.sh
+```
+
+If the shell displays its `>` continuation prompt after `cat > file <<'EOF'`,
+send `Ctrl-C` before doing anything else; the heredoc body or terminator did
+not arrive. See [references/file-transfer.md](references/file-transfer.md) for
+the guarded non-interactive fallback and configuration-file verification.
+
 ### Interactive shell
 
 ```bash

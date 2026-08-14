@@ -12,6 +12,44 @@ slicer vm cp ./script.sh VM_NAME:/tmp/script.sh \
   --mode=binary --permissions 0755 --uid 1000
 ```
 
+## Multi-line scripts and configuration files
+
+Create the whole file locally first, then copy it into the VM. This is the
+default for shell scripts, systemd units, YAML, JSON, and other structured
+content. It is safer than opening `cat <<EOF` in `vm shell` or sending a
+heredoc line-by-line through tmux because the terminal can drop, split, or
+misdirect the body or terminator.
+
+```bash
+# Edit record-capture-pane.sh locally, then transfer it atomically.
+slicer vm exec VM_NAME --uid 1000 -- \
+  "mkdir -p /home/ubuntu/record-scripts"
+slicer vm cp ./record-capture-pane.sh \
+  VM_NAME:/home/ubuntu/record-scripts/record-capture-pane.sh \
+  --uid 1000 --permissions 0755
+
+# Verify before running it.
+slicer vm exec VM_NAME --uid 1000 --shell="" -- \
+  /bin/bash -n /home/ubuntu/record-scripts/record-capture-pane.sh
+```
+
+If `vm cp` is unsuitable, stream an already-complete local file through one
+non-interactive request instead of typing its contents into a PTY:
+
+```bash
+slicer vm exec VM_NAME --uid 1000 -- \
+  "cat > /home/ubuntu/record-scripts/record-capture-pane.sh" \
+  < ./record-capture-pane.sh
+```
+
+Do not send just an opening heredoc such as
+`cat > file <<'EOF'` to an interactive shell. A visible `>` prompt means Bash
+is still waiting for the body and a line containing only `EOF`; send `Ctrl-C`
+to cancel before trying anything else. If local staging is genuinely
+impossible, send the complete quoted heredoc and terminator in one bounded,
+non-interactive `slicer vm exec` request. Quote the delimiter (`<<'EOF'`) to
+prevent expansion. Never build it one `send-keys` call at a time.
+
 When the local destination is an existing directory, the downloaded file uses
 the remote source basename:
 

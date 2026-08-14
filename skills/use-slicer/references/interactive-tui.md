@@ -72,6 +72,13 @@ host pane (Pattern B).
   required") and answer it with `send-keys`.
 - `send-keys` types literally and needs an explicit `Enter`. Control keys are
   named: `tmux send-keys -t agent C-c`, `Escape`, `Up`.
+- **Do not create multi-line files through `send-keys` or an interactive
+  heredoc.** Create the complete script/configuration locally and copy it with
+  `slicer vm cp`, then validate it inside the VM. Sending only
+  `cat > file <<'EOF'` leaves Bash at its `>` continuation prompt if the body
+  or terminator is delayed, truncated, or lands in the wrong pane. If that has
+  happened, send `C-c`, confirm the normal prompt has returned, and switch to
+  local staging plus `vm cp`.
 - Typical use: SDET-style testing of TUIs and coding agents — send a prompt,
   capture the screen, assert on what it shows, all from an orchestrating
   agent.
