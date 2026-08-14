@@ -1,6 +1,6 @@
 ---
 name: use-slicer
-description: Use Slicer to launch, name, tag, prepare, and cold-fork Linux microVMs for sandboxed builds, E2E tests, Docker, CI, and isolated development — works from macOS and Linux hosts
+description: Use Slicer to launch, name, tag, prepare, and cold-fork Linux microVMs for sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, and isolated development — works from macOS and Linux hosts
 allowed-tools: Bash
 ---
 
@@ -38,6 +38,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/file-transfer.md](references/file-transfer.md) — binary and recursive copies, exclusions, destinations, and legacy-agent compatibility
 - [references/interactive-tui.md](references/interactive-tui.md) — driving interactive TUIs and coding agents (guest tmux via exec, or host tmux + vm shell)
 - [references/networking.md](references/networking.md) — bridge, isolated, and macvtap (LAN-direct) networking
+- [references/headless-browser.md](references/headless-browser.md) — render post-JavaScript DOM and screenshots with a lean, real browser inside a VM
 - [references/vm-names-and-tags.md](references/vm-names-and-tags.md) — friendly CLI names, canonical hostnames, mutable tags, and raw API lookup
 - [references/agent-sandboxes.md](references/agent-sandboxes.md) — coding-agent sandbox detail
 - [references/cold-forking.md](references/cold-forking.md) — cache a prepared builder and fork clean runners
