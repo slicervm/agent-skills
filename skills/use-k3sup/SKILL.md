@@ -12,6 +12,12 @@ Use this skill when the user asks for:
 - run k3sup or k3sup-pro
 - provision single-node K3s or HA k3s with multiple slicer VMs
 
+For the single-node **local** in-VM flow (no traefik, svclb LoadBalancer,
+kubeconfig merged into `~/.kube/config`, nginx smoke test via 127.0.0.1),
+see the companion **`use-k3s`** skill — it is the verified short path for
+"just get me a working local cluster with kubectl". This skill covers the
+remote (SSH) and HA (k3sup-pro) flows.
+
 ## Golden rules for agent behavior
 
 - Prefer native Slicer commands (`slicer vm exec`, `slicer vm shell`, `slicer vm cp`) over SSH when the VM is local.
@@ -34,17 +40,20 @@ curl -SLs https://get.arkade.dev | bash
 # If command write permissions are restricted, run with sudo:
 curl -SLs https://get.arkade.dev | sudo bash
 
-arkade get k3sup
-arkade get kubectl
+# one call, parallel downloads — do not chain separate `arkade get` lines
+arkade get k3sup kubectl
 ```
 
 - On Slicer VMs, `arkade` is preinstalled by default, so use it directly:
 
 ```bash
-arkade get k3sup
-arkade get kubectl
+arkade get k3sup kubectl
 ```
 
+- Get **all** the tools a task needs in a **single** `arkade get` call (it
+  downloads in parallel, and supports `tool@version` pinning). Chaining
+  `arkade get x && arkade get y` serialises the downloads for no reason.
+  See the `use-slicer` skill's `arkade.md` reference for the full pattern and flags.
 - If `k3sup` or `kubectl` is not present, install them from `arkade` rather than downloading release archives manually.
 - For HA cluster operations with `k3sup-pro`, start by installing `k3sup-pro` with `k3sup get pro` from the control host (not from target nodes).
 

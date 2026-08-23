@@ -66,10 +66,23 @@ host pane (Pattern B).
 - **Relax the agent's permission gates before unattended runs** — permission
   prompts stall the session with nobody there to approve them. Inside a
   disposable Slicer VM the VM itself is the guardrail, so auto-approve is
-  reasonable: `claude --dangerously-skip-permissions`, or for OpenCode set
-  `"permission": {"bash": "allow", "edit": "allow"}` in `opencode.json`.
+  reasonable: `claude --dangerously-skip-permissions`, or for OpenCode use
+  `opencode --auto` (auto-approves each prompt; verified wired identically
+  to the hidden `--dangerously-skip-permissions`/`--yolo` flags in
+  1.18.18), or set `"permission": {"bash": "allow", "edit": "allow"}` in
+  `opencode.json` (note: config alone can still miss the external-directory
+  prompt — prefer the flag).
   Alternatively, watch for the prompt in `capture-pane` output ("Permission
   required") and answer it with `send-keys`.
+- **Pin the model explicitly for tests** — `opencode --auto -m
+  provider/model`. The config's default `model` may not be what you think
+  (and the config copied into a VM may point a provider at a host-local
+  endpoint that is unreachable from the VM).
+- **Verify skills are discovered before relying on them** — after copying a
+  `SKILL.md` into `~/.config/opencode/skills/<name>/` (or
+  `~/.claude/skills/<name>/`), run `opencode debug skill` and confirm the
+  entry appears. Skills are loaded at startup, so the check must happen
+  after the TUI has started (or in a fresh `opencode` invocation).
 - `send-keys` types literally and needs an explicit `Enter`. Control keys are
   named: `tmux send-keys -t agent C-c`, `Escape`, `Up`.
 - **Do not create multi-line files through `send-keys` or an interactive

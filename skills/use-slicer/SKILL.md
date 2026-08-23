@@ -26,6 +26,41 @@ Go SDK: https://github.com/slicervm/sdk (`github.com/slicervm/sdk`)
 
 On macOS, the CLI drives **Slicer for Mac** — a persistent Linux VM plus an `sbox` host group for sandboxes. See [references/macos.md](references/macos.md).
 
+## Install or update Slicer itself
+
+Use Slicer's own installation and update paths. **Never run `arkade get
+slicer`**: Slicer is not an arkade tool. Use arkade for other CLI tools when
+appropriate, including tools installed inside a guest, but do not infer that
+it installs or upgrades Slicer.
+
+Fresh Linux installation (and the Slicer CLI on macOS):
+
+```bash
+curl -sLS https://get.slicervm.com | sudo bash
+```
+
+Update an existing installation atomically, then verify it:
+
+```bash
+sudo slicer update
+slicer version
+```
+
+For a non-destructive side-by-side version test, let the installed Slicer
+client fetch the correct OS/architecture binary into a temporary directory:
+
+```bash
+TEST_DIR=$(mktemp -d)
+slicer update --version 0.1.216 --path "$TEST_DIR"
+"$TEST_DIR/slicer" version
+# Remove TEST_DIR after testing.
+```
+
+Follow the official [Linux installation
+guide](https://docs.slicervm.com/getting-started/install/) or [Slicer for Mac
+installation guide](https://docs.slicervm.com/mac/installation/) for platform
+setup, dependencies, storage backends, licensing, and daemon installation.
+
 ## Reference files
 
 Deeper material is split into reference files — read the relevant one when a task calls for it:
@@ -36,6 +71,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/custom-images.md](references/custom-images.md) — custom rootfs images and userdata
 - [references/bg-exec.md](references/bg-exec.md) — background exec detail
 - [references/file-transfer.md](references/file-transfer.md) — binary and recursive copies, exclusions, destinations, and legacy-agent compatibility
+- [references/arkade.md](references/arkade.md) — installing CLI tools with `arkade get` (one call, parallel downloads, `tool@version` pinning)
 - [references/interactive-tui.md](references/interactive-tui.md) — driving interactive TUIs and coding agents (guest tmux via exec, or host tmux + vm shell)
 - [references/networking.md](references/networking.md) — bridge, isolated, and macvtap (LAN-direct) networking
 - [references/headless-browser.md](references/headless-browser.md) — render post-JavaScript DOM and screenshots with a lean, real browser inside a VM
@@ -46,6 +82,23 @@ Deeper material is split into reference files — read the relevant one when a t
 
 Companion skills: **`use-slicer-worktrees`** (git worktrees in a VM), **`use-slicer-proxy`** (filtered egress + secret injection).
 
+### Direct guest-agent administration
+
+Normal automation should use the host-side `slicer vm` commands in this
+skill. If a task genuinely needs to administer `slicer-agent` from inside a
+guest, generate and load its version-matched guidance first:
+
+```bash
+mkdir -p ~/.config/opencode/skills/use-slicer-agent
+slicer-agent skill > ~/.config/opencode/skills/use-slicer-agent/SKILL.md
+```
+
+That generated skill covers the complete guest CLI and, in particular, the
+boundary between CA-only setup and transparent proxy installation. Do not
+infer a DNS-only mode from `slicer-agent proxy install --dns`: proxy install
+always manages the HTTP/HTTPS OUTPUT redirects, while `--dns` only toggles
+the additional DNS listener.
+
 ## Prerequisites — You Need a Running Daemon
 
 Slicer is **not a SaaS** — it requires a running daemon that manages VMs.
@@ -54,32 +107,37 @@ Slicer is **not a SaaS** — it requires a running daemon that manages VMs.
 
 For agent tasks that can create infrastructure, use this default pattern:
 
-1. Reuse the session VM when already known (for example, because the same workflow tagged VM was created earlier in this run). Otherwise create a new VM and tag it.
-2. Track and pass the session VM name forward (instead of switching to an arbitrary existing VM) so subsequent commands in the same session stay on the same instance.
-3. Tag VMs so they are identifiable later, for example `workflow=<slug>`.
-4. Run in-VM commands with native `slicer vm` operations (`exec`, `bg exec`, `cp`, `shell`).
+1. Reuse the session VM when already known. Otherwise choose a unique friendly reference, pass it as the `--name` input, and add a descriptive workflow tag.
+2. Capture the generated `.hostname` output separately for diagnostics and raw API/SDK calls. Do not try to extract the friendly name from launch output: the agent chose it before launch.
+3. Pass the friendly reference to subsequent `exec`, `bg`, `cp`, `fs`, `shell`, health, logs, and lifecycle commands.
+4. Tag VMs so they are identifiable later, for example `workflow=<slug>`.
+5. Run in-VM commands with native `slicer vm` operations (`exec`, `bg exec`, `cp`, `shell`).
    - Use `slicer vm exec` for short, atomic commands.
    - Use `slicer vm bg exec` for long-running processes (dev servers, builds) that should survive client disconnect — check back with `bg logs`, `bg wait`, and clean up with `bg kill` + `bg remove`.
    - Use `slicer vm shell` for long sessions or multiple related commands (interactive PTY).
-5. Prefer native Slicer commands over SSH even when SSH is available.
+6. Prefer native Slicer commands over SSH even when SSH is available.
 
 Example:
 
 ```bash
 WORKFLOW=ci-$(date +%Y%m%d-%H%M%S)
-# Reuse SESSION_VM if already set for this run, else create once and record it.
-if [ -n "${SLICER_SESSION_VM:-}" ]; then
-  VM_NAME="$SLICER_SESSION_VM"
+# Reuse the friendly reference if already set for this run.
+if [ -n "${SLICER_SESSION_VM_REF:-}" ]; then
+  VM_REF="$SLICER_SESSION_VM_REF"
+  VM_HOSTNAME="${SLICER_SESSION_VM_HOSTNAME:-}"
 else
-  VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" --wait --json | jq -r '.hostname')
-  export SLICER_SESSION_VM="$VM_NAME"
+  VM_REF="$WORKFLOW" # input chosen here; --name stores it as name=<value>
+  VM_HOSTNAME=$(slicer vm add sbox --name "$VM_REF" \
+    --tag "workflow=$WORKFLOW" --wait --json | jq -r '.hostname')
+  export SLICER_SESSION_VM_REF="$VM_REF"
+  export SLICER_SESSION_VM_HOSTNAME="$VM_HOSTNAME"
 fi
 
-# then use returned hostname in subsequent commands:
-slicer vm exec "$VM_NAME" --uid 1000 -- "uname -a"
-slicer vm cp ./local.txt "$VM_NAME":/tmp/local.txt --uid 1000
+# Keep using the friendly reference, not the generated hostname.
+slicer vm exec "$VM_REF" --uid 1000 -- "uname -a"
+slicer vm cp ./local.txt "$VM_REF":/tmp/local.txt --uid 1000
 # for longer interactive work, open a shell session instead of repeating many one-off execs:
-slicer vm shell "$VM_NAME" --uid 1000
+slicer vm shell "$VM_REF" --uid 1000
 
 # use exec for deterministic one-liners; use shell for ongoing interactive workflows
 ```
@@ -95,7 +153,7 @@ export SLICER_URL=https://box.slicervm.com
 export SLICER_TOKEN_FILE=~/.slicer/gh-access-token   # a GitHub personal access token
 ```
 
-You get one VM to recycle; its disk persists between sessions (installed packages, files, services). Factory-reset by `slicer vm delete VM_NAME` then `slicer vm launch` + `slicer vm ready`.
+You get one VM to recycle; its disk persists between sessions (installed packages, files, services). Factory-reset by `slicer vm delete VM_REF` then `slicer vm launch` + `slicer vm ready`.
 
 **Existing Linux daemon.** Connect to a daemon already running locally or on the LAN. **Ask the user** for the URL and token path — don't guess.
 
@@ -111,6 +169,30 @@ export SLICER_TOKEN=$(sudo cat /var/lib/slicer/auth/token)
 ```
 
 Check for a running daemon with `ps aux | grep -E "slicer|firecracker" | grep -v grep`. If the user supplies `SLICER_TOKEN` / `SLICER_TOKEN_FILE` or a specific endpoint, use those exactly and do not infer defaults.
+
+### Plain HTTP on a trusted LAN
+
+For a non-local `http://` API URL, Slicer warns that the connection is not
+encrypted. In CLI 0.1.216 and later, the warning goes to stderr so JSON stdout
+remains pipeable:
+
+```bash
+slicer vm group --json | jq -r '.[].name'
+```
+
+Do not use `2>&1 | jq`: that deliberately merges the warning and real errors
+into jq's JSON input. On an explicitly trusted LAN, suppress only the warning
+when quiet stderr is required:
+
+```bash
+export SLICER_TLS_WARN=0       # "false" also disables it
+export SLICER_TLS_WARN=1       # restore warnings; unsetting it does the same
+```
+
+Suppression does not encrypt the connection; prefer HTTPS outside a trusted
+LAN. CLI 0.1.215 and earlier may print this warning to stdout. If
+`2>/dev/null` still leaves `Warning: Slicer URL...` in a JSON pipeline, run
+`slicer version` and update the client rather than filtering non-JSON lines.
 
 **No daemon running?** To generate a config and start your own — locally or over SSH — see [references/daemon-setup.md](references/daemon-setup.md).
 
@@ -182,7 +264,14 @@ The hostname is printed on creation (e.g. `demo-3`). Key flags:
 | `--secrets secret1,secret2` | Allow access to named secrets |
 | `--persistent` | Keep VM state across daemon restarts/shutdowns (default `true`); pass `--persistent=false` for ephemeral |
 
-For automation, use `--wait --json` to return only after the guest agent is ready and capture `.hostname`. Use `--wait-userdata --json` when userdata must also finish before the command returns. `slicer vm ready <VM_NAME>` remains useful when a VM was launched asynchronously.
+For automation, use `--wait --json` to return only after the guest agent is
+ready. When using `--name`, keep the chosen name as `VM_REF` for later CLI
+commands and store `.hostname` separately as `VM_HOSTNAME`; do not replace the
+friendly reference with the JSON hostname or expect a separate name output
+field. `--name` is an input convenience that adds the immutable `name=<value>`
+tag. Use `--wait-userdata --json` when userdata must also finish before the
+command returns. `slicer vm ready <VM_REF>` remains useful when a VM was
+launched asynchronously.
 
 When creating VMs for mutable tasks, do not target or reuse `slicer-1` on slicer-mac unless the user explicitly requests it. Reuse the session's tagged VM when known; otherwise create a new VM with explicit `--tag`.
 
@@ -193,10 +282,11 @@ VMs created with `slicer vm add` are persistent by default, they survive daemon 
 **On slicer-mac**: launch into the `sbox` host group explicitly — the `slicer` group is reserved for the persistent Linux twin.
 
 ```bash
-VM_NAME=$(slicer vm add sbox \
+VM_REF=rustfs-demo
+VM_HOSTNAME=$(slicer vm add sbox --name "$VM_REF" \
   --tag "workflow=rustfs" --tag "purpose=s3-demo" \
-  | awk '/Hostname:/ {print $2; exit}')
-slicer vm ready "$VM_NAME"
+  --wait --json | jq -r '.hostname')
+slicer vm ready "$VM_REF"
 
 # Rediscover later by tag:
 slicer vm list --json \
@@ -213,10 +303,16 @@ slicer shell papermaking
 slicer vm cp papermaking:~/guide.html .
 ```
 
-The name is CLI sugar for the immutable, unique `name=papermaking` tag;
-the generated hostname remains the API identity. Do not combine `--name`
-with a manual `--tag name=...`, add a `name` API field, or invent an alias
-endpoint. Ordinary tags can be changed with `slicer vm tag`.
+`--name` is an input: choose and retain it before launch. It is CLI sugar for
+adding the immutable `name=papermaking` tag, not a separate API name field or
+an output that must be captured. Capture launch JSON's generated `hostname`
+separately, then continue using the known friendly name for Slicer CLI
+commands. The guest's own `hostname` command still prints the generated
+hostname; this does not mean friendly-name resolution failed.
+
+The generated hostname remains the API identity. Do not combine `--name` with
+a manual `--tag name=...`, add a `name` API field, or invent an alias endpoint.
+Ordinary tags can be changed with `slicer vm tag`.
 
 For raw API/SDK lookup, tag mutation, validation rules, list rendering, and
 the CLI's direct-hostname-first resolution, read
@@ -238,10 +334,10 @@ the CLI's direct-hostname-first resolution, read
 
 ```bash
 # Block until the slicer-agent is responsive (default)
-slicer vm ready VM_NAME --agent --timeout 5m
+slicer vm ready VM_REF --agent --timeout 5m
 
 # Block until userdata script has finished
-slicer vm ready VM_NAME --userdata --timeout 5m
+slicer vm ready VM_REF --userdata --timeout 5m
 ```
 
 `--agent` waits for the in-VM slicer-agent (vsock RPC). `--userdata` waits for the bootstrap script to complete (guarded by `/etc/slicer/userdata-ran` in the guest). Polling interval: `--interval 100ms` (default).
@@ -251,7 +347,7 @@ Prefer `slicer vm shell` for interactive workflows that need command history, in
 ### Non-blocking health check
 
 ```bash
-slicer vm health VM_NAME --json    # Agent version, uptime, stats — does not block
+slicer vm health VM_REF --json    # Agent version, uptime, stats — does not block
 ```
 
 ---
@@ -261,7 +357,7 @@ slicer vm health VM_NAME --json    # Agent version, uptime, stats — does not b
 ### Execute a command (foreground)
 
 ```bash
-slicer vm exec VM_NAME -- "whoami"
+slicer vm exec VM_REF -- "whoami"
 ```
 
 `slicer vm exec` blocks until the command exits and streams stdout/stderr inline.
@@ -277,7 +373,7 @@ Anti-pattern: `slicer vm exec ... -- /bin/bash -lc "..."` (unless required for n
 The default user is auto-detected (typically `ubuntu`, uid 1000). Override with `--uid`:
 
 ```bash
-slicer vm exec VM_NAME --uid 1000 -- "sudo apt update && sudo apt install -y nginx"
+slicer vm exec VM_REF --uid 1000 -- "sudo apt update && sudo apt install -y nginx"
 ```
 
 Key flags:
@@ -294,17 +390,17 @@ Key flags:
 Example:
 
 ```bash
-slicer vm exec VM_NAME --uid 1000 --cwd ~/project --env FOO=bar --env DEBUG=1 -- "env | sort | head -n 5"
+slicer vm exec VM_REF --uid 1000 --cwd ~/project --env FOO=bar --env DEBUG=1 -- "env | sort | head -n 5"
 ```
 
 Pipes and stdin work:
 
 ```bash
 # Pipe local file into VM
-cat script.sh | slicer vm exec VM_NAME -- "bash"
+cat script.sh | slicer vm exec VM_REF -- "bash"
 
 # Pipes inside VM
-slicer vm exec VM_NAME -- "ps aux | grep nginx"
+slicer vm exec VM_REF -- "ps aux | grep nginx"
 ```
 
 ### Create scripts and configuration files safely
@@ -315,9 +411,9 @@ the VM. Do not construct them with an interactive heredoc or one tmux
 
 ```bash
 # Create or edit setup.sh locally using the agent's normal file-editing tool.
-slicer vm cp ./setup.sh VM_NAME:/home/ubuntu/setup.sh \
+slicer vm cp ./setup.sh VM_REF:/home/ubuntu/setup.sh \
   --uid 1000 --permissions 0755
-slicer vm exec VM_NAME --uid 1000 --shell="" -- \
+slicer vm exec VM_REF --uid 1000 --shell="" -- \
   /bin/bash -n /home/ubuntu/setup.sh
 ```
 
@@ -329,7 +425,7 @@ the guarded non-interactive fallback and configuration-file verification.
 ### Interactive shell
 
 ```bash
-slicer vm shell VM_NAME
+slicer vm shell VM_REF
 ```
 
 Flags (from `slicer vm shell --help`): `--uid`, `--cwd`, `--shell`, `--bootstrap "command"` (run on connect).
@@ -355,20 +451,20 @@ Do **not** use `slicer vm exec ... &` — that ties the child to the local shell
 
 ```bash
 # 1. Positional — separate tokens after --
-slicer vm bg exec VM_NAME --uid 1000 -- npm run dev
+slicer vm bg exec VM_REF --uid 1000 -- npm run dev
 
 # 2. Explicit — preferred for agents
-slicer vm bg exec VM_NAME --uid 1000 -c npm -a run -a dev
+slicer vm bg exec VM_REF --uid 1000 -c npm -a run -a dev
 
 # 3. Shell — opt-in for $VAR, pipes, &&
-slicer vm bg exec VM_NAME --uid 1000 --shell=/bin/bash -- "cd /app && exec npm run dev"
+slicer vm bg exec VM_REF --uid 1000 --shell=/bin/bash -- "cd /app && exec npm run dev"
 ```
 
 **Capture exec_id** for later management:
 
 ```bash
-VM_HOSTNAME=dev-1 # canonical hostname returned by launch
-EX=$(slicer vm bg exec "$VM_HOSTNAME" --uid 1000 --cwd /home/ubuntu/app \
+VM_REF=devserver # friendly name assigned with --name
+EX=$(slicer vm bg exec "$VM_REF" --uid 1000 --cwd /home/ubuntu/app \
      -- npm run dev \
      | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
 ```
@@ -376,17 +472,19 @@ EX=$(slicer vm bg exec "$VM_HOSTNAME" --uid 1000 --cwd /home/ubuntu/app \
 **Management subcommands:**
 
 ```bash
-slicer vm bg list   "$VM_HOSTNAME"                     # list running + exited
-slicer vm bg info   "$VM_HOSTNAME" "$EX"               # JSON status of one exec
-slicer vm bg logs   "$VM_HOSTNAME" "$EX"               # dump ring buffer (--follow to stream)
-slicer vm bg wait   "$VM_HOSTNAME" "$EX" --timeout 10m # block until exit
-slicer vm bg kill   "$VM_HOSTNAME" "$EX"               # SIGTERM (→ SIGKILL after 5s)
-slicer vm bg remove "$VM_HOSTNAME" "$EX"               # only after exit; frees the control record
+slicer vm bg list   "$VM_REF"                     # list running + exited
+slicer vm bg info   "$VM_REF" "$EX"               # JSON status of one exec
+slicer vm bg logs   "$VM_REF" "$EX"               # dump ring buffer (--follow to stream)
+slicer vm bg wait   "$VM_REF" "$EX" --timeout 10m # block until exit
+slicer vm bg kill   "$VM_REF" "$EX"               # SIGTERM (→ SIGKILL after 5s)
+slicer vm bg remove "$VM_REF" "$EX"               # only after exit; frees the control record
 ```
 
-In CLI 0.1.210, `bg kill` is the one background subcommand that still requires
-the canonical hostname. `bg remove` does not kill a live child: kill and wait
-before removing it, or the process continues without a control handle.
+CLI 0.1.216 and later accept friendly names consistently across background
+subcommands. Update older clients that require a canonical hostname rather
+than designing the workflow around that inconsistency. `bg remove` does not
+kill a live child: kill and wait before removing it, or the process continues
+without a control handle.
 
 Key flags: `--uid`, `--cwd`, `--env KEY=VALUE`, `--ring-bytes 4M` (buffer cap, default 1M), `--follow`, `--json`. If binary not on `$PATH`, use full path: `-- /usr/local/bin/nats-server -p 4222`.
 
@@ -397,9 +495,9 @@ See [references/bg-exec.md](references/bg-exec.md) for the full flag table, ring
 ## File Transfer
 
 ```bash
-slicer vm cp ./local-file.txt VM_NAME:/tmp/file.txt --uid 1000
-slicer vm cp VM_NAME:/etc/os-release ./os-release.txt
-slicer cp -r ./my-project/ VM_NAME:/home/ubuntu/project/ --uid 1000
+slicer vm cp ./local-file.txt VM_REF:/tmp/file.txt --uid 1000
+slicer vm cp VM_REF:/etc/os-release ./os-release.txt
+slicer cp -r ./my-project/ VM_REF:/home/ubuntu/project/ --uid 1000
 ```
 
 Use binary mode without `-r` for one file. Always use `-r` / `--recursive`
@@ -426,9 +524,9 @@ if lsof -i TCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "Local port $PORT is already in use."
   exit 1
 fi
-slicer vm forward VM_NAME -L 8080:127.0.0.1:8080
-slicer vm forward VM_NAME -L 127.0.0.1:2375:/var/run/docker.sock
-slicer vm forward VM_NAME -L /tmp/docker.sock:/var/run/docker.sock
+slicer vm forward VM_REF -L 8080:127.0.0.1:8080
+slicer vm forward VM_REF -L 127.0.0.1:2375:/var/run/docker.sock
+slicer vm forward VM_REF -L /tmp/docker.sock:/var/run/docker.sock
 ```
 
 Forwards run in the foreground. Read
@@ -440,12 +538,12 @@ multiple forwards, sockets, and bridge, isolated, macvtap, and macOS details.
 ## VM Lifecycle
 
 ```bash
-slicer vm pause VM_NAME       # Freeze (saves CPU, instant resume)
-slicer vm resume VM_NAME      # Unfreeze
-slicer vm shutdown VM_NAME    # Graceful shutdown
-slicer vm delete VM_NAME      # Remove VM
-slicer vm suspend VM_NAME     # Save state to disk (snapshot)
-slicer vm restore VM_NAME     # Restore from snapshot
+slicer vm pause VM_REF       # Freeze (saves CPU, instant resume)
+slicer vm resume VM_REF      # Unfreeze
+slicer vm shutdown VM_REF    # Graceful shutdown
+slicer vm delete VM_REF      # Remove VM
+slicer vm suspend VM_REF     # Save state to disk (snapshot)
+slicer vm restore VM_REF     # Restore from snapshot
 ```
 
 ### Cold fork a prepared VM
@@ -473,10 +571,10 @@ For cache hits, no-egress runners, cleanup, and agent-safety notes, read
 ### Monitoring
 
 ```bash
-slicer vm health VM_NAME      # Agent status, version, stats (--json)
+slicer vm health VM_REF       # Agent status, version, stats (--json)
 slicer vm top                 # Live metrics for all VMs
-slicer vm top VM_NAME         # Live metrics for one VM
-slicer vm logs VM_NAME        # Boot/console log (--lines N)
+slicer vm top VM_REF          # Live metrics for one VM
+slicer vm logs VM_REF         # Boot/console log (--lines N)
 ```
 
 ---
@@ -502,10 +600,14 @@ credentials, modes, names, tmux, worktrees, and `.slicerignore`.
 
 ## Related skills
 
-Two companion skills cover Slicer features in depth — load them when a task calls for them:
+Companion skills cover Slicer features in depth — load them when a task calls for them:
 
 - **`use-slicer-worktrees`** — get a git worktree or repository into a VM with a working, self-contained `.git`, then pull commits back. Prefer agent `--worktree`; use `slicer wt push` / `pull` / `list` for manual VM flows.
 - **`use-slicer-proxy`** — filter, audit, and inject secrets into HTTP(S) egress from VMs with Slicer Proxy: default-deny allow rules, credential injection (Bearer, Basic, OAuth), and audit / passthrough modes, on Linux and macOS.
+- **`use-xvfb-terminal-recording`** — record a terminal/TUI (coding agent) demo as a real video with Xvfb + xterm + ffmpeg inside a VM; clean ordering, MAD trimming (ships `scripts/mad_trim.py`), and delivery.
+- **`use-dual-terminal-race`** — record two agents racing the same task side by side: one agent per fresh VM, each bridged into a host xterm on a host Xvfb display.
+- **`use-k3s`** — single-node local K3s with k3sup: no traefik, svclb LoadBalancer, kubeconfig merged into `~/.kube/config`, nginx smoke test via 127.0.0.1.
+- **`use-k3sup`** — k3sup / k3sup-pro for remote and HA clusters over SSH.
 
 ---
 
@@ -542,7 +644,7 @@ slicer image remove IMAGE      # Remove an image
 slicer image wipe              # Remove all images
 
 slicer disk list               # List disk leases
-slicer disk export VM_NAME     # Export VM filesystem
+slicer disk export VM_HOSTNAME # Disk commands use the canonical API identity
 slicer disk archive ...        # Archive sparse images
 slicer disk sparsify ...       # Reclaim space
 slicer disk transfer ...       # Compress + transfer via lz4
@@ -559,7 +661,7 @@ slicer info             # Client + server version
 slicer version          # Client version only
 slicer vm route ./cfg.yaml   # Show routing commands (for remote access from Mac/Linux)
 slicer install TOOL     # Install additional tools via OCI
-slicer update           # Replace binary with latest version
+slicer update           # Supported Slicer upgrade path; normally run with sudo
 slicer activate         # Legacy command for GitHub Sponsors and for trial users only. Most users should get a license key from their email and save it to ~/.slicer/LICENSE
 ```
 
@@ -581,7 +683,7 @@ slicer activate         # Legacy command for GitHub Sponsors and for trial users
 |---------|-----|
 | Connection refused | Slicer daemon not running — start with `sudo -E slicer up config.yaml` |
 | Permission denied | Use `sudo` for unix socket access, or verify `--token-file`/`--token` and local TCP credentials |
-| VM not responding | `slicer vm ready VM_NAME --timeout 60s` |
+| VM not responding | `slicer vm ready VM_REF --timeout 60s` |
 | Command hangs | Long-running processes block `vm exec` — use `slicer vm bg exec` instead |
 | Stale state | Delete `.img` and `.lock` files to reset persistent disks |
 | `invalid mode: cp-v1-*` | Update the Slicer CLI to a build using Go SDK v0.0.67 or later; compatibility fallback is client-side, so do not patch the daemon or guest first |

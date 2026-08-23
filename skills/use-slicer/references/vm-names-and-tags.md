@@ -9,6 +9,15 @@ Keep the generated hostname and the friendly name as separate concepts:
 - **Tags**: metadata strings used for selection, ownership, workflows, and
   automation.
 
+Use the friendly name as the primary reference for later CLI commands. Retain
+the generated hostname separately for raw API/SDK calls and diagnostics; do
+not discard the friendly reference after parsing launch JSON.
+
+The friendly name is chosen input, not launch output. Store it in a variable
+before calling `slicer vm add --name`, and independently capture the returned
+`.hostname`. Do not expect a separate top-level name field in JSON: `--name`
+is CLI sugar that adds the immutable `name=<value>` tag.
+
 ## Assign and use a friendly name
 
 Prefer `--name` / `-n` over spelling the well-known tag manually:
@@ -47,11 +56,10 @@ name. The CLI first sends the supplied identifier unchanged. Only after a 404
 does it query for the exact `name=<identifier>` tag and retry with the returned
 canonical hostname.
 
-In Slicer CLI 0.1.210, `slicer vm bg kill` is the known exception: its explicit
-VM argument is sent directly without the fallback. Pass the canonical hostname
-returned at launch for `bg kill`; the other `bg` management commands accept the
-friendly name. Treat this as a temporary CLI consistency defect, not a reason
-to add name resolution to the API or SDK.
+Slicer CLI 0.1.216 and later apply this consistently to background exec and
+the other VM command families. Update an older client if a command rejects a
+valid friendly name; do not make canonical hostnames the default workflow to
+accommodate an obsolete CLI inconsistency.
 
 Keep this direct-first behaviour when extending the CLI. Do not add server-side
 alias middleware, an `/alias` or `/name` route, a `name` request field, or an

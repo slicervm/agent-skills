@@ -44,7 +44,8 @@ For x86-64, change `linux64-aarch64` to `linux64`. Package names above are for
 Ubuntu 24.04; inspect `ldd /home/ubuntu/firefox/firefox` and use the local
 distribution's equivalent packages elsewhere.
 
-For a screenshot with an exact viewport, Firefox's CLI is enough:
+For a screenshot with an exact viewport, Firefox's CLI is enough for
+simple pages or localhost dev servers where assets are already local:
 
 ```bash
 URL=http://127.0.0.1:8080/
@@ -61,14 +62,34 @@ slicer vm exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu -- \
 slicer vm cp "$VM_NAME":/tmp/page.png ./page.png
 ```
 
-Firefox's CLI does not have a `--dump-dom` switch. For both the post-JavaScript
-DOM and a screenshot, run its built-in WebDriver BiDi server on loopback and
-use the bundled Node client. Slicer base images already contain Node; check
-`node --version` before relying on this route in a custom image.
+**`--screenshot` fires before images finish loading.** The CLI flag waits
+for the DOM `load` event but does not wait for images, fonts, or lazy
+assets to finish downloading. On localhost pages with no external assets
+this is fine. On external sites with images, SVGs, or fonts loaded over
+the network, the screenshot may capture a partially-rendered page with
+missing graphics. There is no `--delay` or `--wait` flag on the Firefox
+CLI to work around this.
+
+When full asset rendering matters, use the WebDriver BiDi route below —
+`browsingContext.navigate` with `wait: "complete"` plus a short delay
+before `captureScreenshot` ensures images have loaded.
+
+Firefox's CLI does not have a `--dump-dom` switch. For both the
+post-JavaScript DOM and a screenshot with fully-loaded assets, run its
+built-in WebDriver BiDi server on loopback. The skill ships a Node.js
+client (`scripts/firefox-bidi.mjs`); check `node --version` first — not
+all slicer images include Node (Ubuntu 22.04 x86_64 images do not). When
+Node is unavailable, the same BiDi protocol works from Python using only
+the standard library (`scripts/firefox-bidi.py`).
 
 ```bash
+# Node.js client (when node is available):
 slicer vm cp skills/use-slicer/scripts/firefox-bidi.mjs \
   "$VM_NAME":/tmp/firefox-bidi.mjs --uid 1000
+
+# Python stdlib client (no Node.js required):
+slicer vm cp skills/use-slicer/scripts/firefox-bidi.py \
+  "$VM_NAME":/tmp/firefox-bidi.py --uid 1000
 
 slicer vm bg exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu \
   --shell=/bin/bash -- \
@@ -78,10 +99,18 @@ slicer vm bg exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu \
        --headless --no-remote --profile /tmp/firefox-profile \
        --remote-debugging-port 9222 about:blank"
 
-# Wait until the background logs contain the ws://127.0.0.1:9222/session URL.
+# Wait for the debugging port to be ready.
+slicer vm exec "$VM_NAME" --uid 1000 -- \
+  "ss -tlnp | grep 9222"
+
+# Capture with whichever client is available:
 slicer vm exec "$VM_NAME" --uid 1000 -- \
   "node /tmp/firefox-bidi.mjs \
-     'http://127.0.0.1:8080/' /tmp/page.dom.html /tmp/page.png"
+     'https://example.com' /tmp/page.dom.html /tmp/page.png"
+# or:
+slicer vm exec "$VM_NAME" --uid 1000 -- \
+  "python3 /tmp/firefox-bidi.py \
+     'https://example.com' /tmp/page.dom.html /tmp/page.png"
 
 slicer vm cp "$VM_NAME":/tmp/page.png ./page.png
 slicer vm cp "$VM_NAME":/tmp/page.dom.html ./page.dom.html
