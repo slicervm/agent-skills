@@ -226,6 +226,28 @@ Host bastion
     ProxyCommand nc -x 192.168.222.1:3129 %h %p   # macOS: 192.168.64.1
 ```
 
+## Explicit proxying when guest DNS is blocked
+
+An isolated guest may be unable to reach the public resolver in
+`/etc/resolv.conf`. That does not require transparent proxy installation for
+HTTP clients. Point the client at slicer-proxy by **IP address**: it carries
+the target hostname in the absolute HTTP request or CONNECT target, and the
+proxy resolves that hostname upstream.
+
+For Docker and BuildKit, install the CA with `slicer-agent ca install`, then
+set `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` in the daemon and builder
+configuration. For APT, put an IP-addressed explicit proxy in a root-readable
+file under `/etc/apt/apt.conf.d/`:
+
+```text
+Acquire::http::Proxy "http://:TOKEN@192.168.222.1:3128";
+Acquire::https::Proxy "https://proxy:TOKEN@192.168.222.1:3129";
+```
+
+Install the CA before using the TLS listener, keep the token out of logs, and
+remove temporary credential files when finished. Do not briefly install and
+remove the transparent helper merely to make APT resolve repository names.
+
 ## Transparent proxy helper
 
 When setting `HTTP(S)_PROXY` per command is awkward, the in-VM helper redirects egress automatically with iptables. It needs the regular (non-`min`) image and the VM's DNS set to `127.0.0.1`.
@@ -234,6 +256,12 @@ When setting `HTTP(S)_PROXY` per command is awkward, the in-VM helper redirects 
 # Inside the VM, as root — point it at the proxy with the client token
 sudo slicer-agent proxy install 192.168.222.1 --token "$PROXY_TOKEN"
 ```
+
+`proxy install` always manages OUTPUT redirects for TCP 80 and 443. Its
+`--dns` flag only toggles the additional local DNS listener; it is not a
+DNS-only mode. There is currently no supported DNS-only installation. If the
+workload supports an explicit proxy, use the explicit configuration above
+instead of fighting the helper's managed iptables rules.
 
 It also supports per-port TCP tunnels and an SSH `ProxyCommand` (the destination needs a `--passthrough` allow rule):
 
