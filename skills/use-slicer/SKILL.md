@@ -80,7 +80,8 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/agent-sandboxes.md](references/agent-sandboxes.md) — coding-agent sandbox detail
 - [references/cold-forking.md](references/cold-forking.md) — cache a prepared builder and fork clean runners
 
-Companion skills: **`use-slicer-worktrees`** (git worktrees in a VM), **`use-slicer-proxy`** (filtered egress + secret injection).
+Companion skills: **`use-slicer-git`** (Git repositories and worktrees in a
+VM), **`use-slicer-proxy`** (filtered egress + secret injection).
 
 ### Direct guest-agent administration
 
@@ -602,7 +603,7 @@ credentials, modes, names, tmux, worktrees, and `.slicerignore`.
 
 Companion skills cover Slicer features in depth — load them when a task calls for them:
 
-- **`use-slicer-worktrees`** — get a git worktree or repository into a VM with a working, self-contained `.git`, then pull commits back. Prefer agent `--worktree`; use `slicer wt push` / `pull` / `list` for manual VM flows.
+- **`use-slicer-git`** — move a self-contained Git repository or worktree into a VM, pull commits back with `slicer wt`, or fetch committed refs from a live VM through `git daemon` and `slicer vm forward`.
 - **`use-slicer-proxy`** — filter, audit, and inject secrets into HTTP(S) egress from VMs with Slicer Proxy: default-deny allow rules, credential injection (Bearer, Basic, OAuth), and audit / passthrough modes, on Linux and macOS.
 - **`use-xvfb-terminal-recording`** — record a terminal/TUI (coding agent) demo as a real video with Xvfb + xterm + ffmpeg inside a VM; clean ordering, MAD trimming (ships `scripts/mad_trim.py`), and delivery.
 - **`use-dual-terminal-race`** — record two agents racing the same task side by side: one agent per fresh VM, each bridged into a host xterm on a host Xvfb display.

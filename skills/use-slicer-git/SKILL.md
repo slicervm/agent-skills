@@ -1,16 +1,28 @@
 ---
-name: use-slicer-worktrees
-description: Move a git worktree or repository into a Slicer microVM with a working, self-contained .git — prefer agent `--worktree` mode for coding sandboxes, use `slicer wt push` for manual VM flows, then pull commits back.
+name: use-slicer-git
+description: "Use Git with Slicer microVMs: launch coding sandboxes with a self-contained worktree, push or pull repositories with `slicer wt`, or fetch committed refs from an existing VM through `git daemon` and `slicer vm forward`."
 allowed-tools: Bash
 ---
 
-# Slicer Worktrees — git worktrees and repos inside a microVM
+# Slicer Git — repositories and worktrees in microVMs
 
 For coding agent sandboxes, prefer `slicer <agent> --worktree [path]`: it launches the VM, pushes a git worktree with a **working, self-contained `.git`**, installs the agent into that path, and attaches in one command.
 
 Use lower-level `slicer wt push` when you are working with a plain VM, reusing a separately created VM, or need explicit control over the push/pull lifecycle. The host repository is never mounted and its hooks never run inside the VM.
 
 This skill assumes a running Slicer daemon — see the `use-slicer` skill for connecting to one.
+
+## Choose the Git flow
+
+| Goal | Use |
+|------|-----|
+| Launch a coding sandbox from a host repository | `slicer <agent> --worktree PATH` |
+| Move a host repository into an existing VM and later bring changes back | `slicer wt push` and `slicer wt pull` |
+| Fetch committed refs from an arbitrary repository already in a VM | Short-lived `git daemon` through `slicer vm forward` |
+
+Git transports only expose committed objects and refs. Commit dirty or
+untracked VM work to a temporary recovery branch before using the live-server
+flow. Use `slicer wt pull` when you deliberately need its separate file overlay.
 
 ## Why `slicer wt` (and not a plain copy)
 
@@ -129,6 +141,73 @@ slicer wt push --launch .     # note the VM name it prints; persistent by defaul
 slicer wt pull <vm> .
 git push
 ```
+
+## Fetch committed refs from a live VM
+
+Use a short-lived `git daemon` when an existing VM repository should behave
+like a read-only Git remote without using `slicer wt`. Git only serves committed
+objects and refs: commit dirty and untracked work to a temporary recovery branch
+inside the VM before fetching it.
+
+Start the daemon as a background exec. Whitelist one exact repository, and bind
+it to guest loopback:
+
+```bash
+VM_REF=e2e-3
+REPO_PARENT=/home/ubuntu/go/src/github.com/openfaasltd
+REPO_NAME=signet
+REPO_GIT_DIR="$REPO_PARENT/$REPO_NAME/.git"
+
+START=$(slicer vm bg exec "$VM_REF" --uid 1000 --cwd "$REPO_PARENT" --json \
+  --cmd git \
+  --arg daemon \
+  --arg=--reuseaddr \
+  --arg="--base-path=$REPO_PARENT" \
+  --arg=--strict-paths \
+  --arg=--export-all \
+  --arg=--enable=upload-pack \
+  --arg=--listen=127.0.0.1 \
+  --arg=--port=9418 \
+  --arg="$REPO_GIT_DIR")
+GIT_EXEC_ID=$(printf '%s\n' "$START" | jq -r .exec_id)
+test -n "$GIT_EXEC_ID" && test "$GIT_EXEC_ID" != null
+```
+
+`upload-pack` is Git daemon's default read-only service; spelling it out makes
+the intended service explicit. With `--strict-paths`, a non-bare repository
+must whitelist its exact `.git` directory. This prevents sibling repositories
+beneath `REPO_PARENT` from being served. For a bare repository, set
+`REPO_GIT_DIR` to the bare repository path instead.
+
+Keep this blocking forward open in a second terminal or a tracked tmux session:
+
+```bash
+slicer vm forward "$VM_REF" -L 9418:127.0.0.1:9418
+```
+
+Clone or fetch from the host through that loopback listener:
+
+```bash
+git clone "git://127.0.0.1:9418/$REPO_NAME/.git" ./recovered-repo
+git -C ./recovered-repo fetch origin
+```
+
+For a bare repository, omit `/.git` from the URL when it is not part of the
+repository's directory name. If local port 9418 is already occupied, change
+only the left-hand port in `-L`, then use that port in the host Git URL.
+
+Stop the forward with `Ctrl-C`, then stop and reap the guest process:
+
+```bash
+slicer vm bg kill "$VM_REF" "$GIT_EXEC_ID" --grace 5s
+slicer vm bg wait "$VM_REF" "$GIT_EXEC_ID" --timeout 10s || true
+slicer vm bg remove "$VM_REF" "$GIT_EXEC_ID"
+```
+
+The `git://` protocol is unencrypted and unauthenticated. Keep the local forward
+on `127.0.0.1`; never publish it with a `0.0.0.0` bind. For authentication and
+encryption, forward guest SSH instead and use an SSH Git URL. Slicer does not
+currently provide a `git-remote-slicer` helper.
 
 ## Availability
 

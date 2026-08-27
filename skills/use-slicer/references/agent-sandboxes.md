@@ -92,7 +92,7 @@ git push                     # push from the host under your own identity
 
 Creating a provision-only agent sandbox first and then pushing into it still works, but treat that as an advanced/manual path when you deliberately need to stage code separately.
 
-A plain copy of a git worktree breaks: its `.git` is a *file* holding an absolute host path, so every git command in the VM fails. `slicer wt` stages a sanitised `.git` instead. See the **`use-slicer-worktrees`** skill for the full `slicer wt push` / `pull` / `list` reference.
+A plain copy of a git worktree breaks: its `.git` is a *file* holding an absolute host path, so every git command in the VM fails. `slicer wt` stages a sanitised `.git` instead. See the **`use-slicer-git`** skill for the full worktree lifecycle and live-VM Git serving workflows.
 
 ## Cold-forked agent bases
 

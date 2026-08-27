@@ -18,11 +18,13 @@ forwarding, agent sandboxes, and more.
 
 Works from macOS (via slicer-mac) and Linux hosts.
 
-### use-slicer-worktrees
+### use-slicer-git
 
-`skills/use-slicer-worktrees`
+`skills/use-slicer-git`
 
-Move a git worktree or repository into a Slicer microVM with a working, self-contained `.git`. Prefer agent `--worktree` mode for coding sandboxes; use `slicer wt push` / `pull` / `list` for lower-level VM flows. Pull commits back onto your host branch when the VM work is done.
+Use Git with Slicer microVMs: move self-contained repositories and worktrees
+into coding sandboxes, pull commits back with `slicer wt`, or fetch committed
+refs from a live VM through `git daemon` and `slicer vm forward`.
 
 ### use-slicer-proxy
 
@@ -60,13 +62,13 @@ This installs the skills into whichever AI coding agents you have (Claude Code, 
 ```bash
 /plugin marketplace add slicervm/agent-skills
 /plugin install use-slicer@slicer
-/plugin install use-slicer-worktrees@slicer
+/plugin install use-slicer-git@slicer
 /plugin install use-slicer-proxy@slicer
 /plugin install use-s3-rustfs@slicer
 /plugin install use-k3sup@slicer
 ```
 
-Install only the plugin skills you need; `use-s3-rustfs`, `use-slicer-worktrees`, and `use-slicer-proxy` all assume `use-slicer` is also installed.
+Install only the plugin skills you need; `use-s3-rustfs`, `use-slicer-git`, and `use-slicer-proxy` all assume `use-slicer` is also installed.
 Claude Code exposes plugin skills under their plugin namespace, for example `/use-slicer:use-slicer`.
 
 ### Manual
@@ -100,6 +102,10 @@ Copy my project into a VM, build it, and bring back the binary
 
 ```
 Launch a Codex sandbox with my git worktree
+```
+
+```
+Fetch a committed branch from a repository already inside my Slicer VM
 ```
 
 ```
