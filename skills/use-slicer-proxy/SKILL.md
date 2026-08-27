@@ -273,6 +273,83 @@ ssh -o ProxyCommand='slicer-agent proxy connect %h:%p' user@bastion
 
 See https://docs.slicervm.com/proxy/transparent/ for the helper, tunnel management, and Docker build caveats (containers need the CA at `/runner/ca.crt` added to their trust store).
 
+## Troubleshooting: connections reach nothing, or reach it silently
+
+Symptom: `curl -x http://<proxy-ip>:3128/ ...` (or the guest equivalent) gets
+`curl: (52) Empty reply from server` / `curl: (56) Proxy CONNECT aborted`, the
+same request via `127.0.0.1` on the same proxy works fine, and the proxy's own
+log shows nothing at all for the failing request. This exact signature took a
+multi-hour, multi-theory investigation to resolve once (a customer's macOS
+Application Firewall was set to block all incoming connections) — use this
+order to get there in minutes instead:
+
+1. **Reach for `--trace` first, before any other theory.** `slicer proxy up
+   --trace` drops the logger to Debug and logs every stage of the CONNECT
+   path: `connection accepted` (raw TCP accept, before any HTTP parsing) →
+   `request received` → `authenticated` → `rule matched` → `egress check
+   passed` → `hijacked connection` → `wrote CONNECT 200` → `issued MITM leaf`
+   → `inner TLS handshake ok` → `entering MITM tunnel`. Re-run the exact
+   failing request. **If nothing prints, not even `connection accepted`, the
+   request never reaches this process at all** — stop looking at slicer/proxy
+   config and rules entirely; the cause is upstream of the Go process.
+2. **Loopback works, the bind/gateway IP doesn't, on both host- and
+   guest-originated traffic → this is not a slicer bug.** It's the signature
+   of something intercepting non-loopback traffic before it reaches the
+   listener: a host-level firewall or a network content-filter extension.
+   On macOS check, in this order:
+   - `/usr/libexec/ApplicationFirewall/socketfilterfw --getblockall` — if it
+     reports `enabled`, that's very likely the whole answer. Disable it, or
+     explicitly allow the `slicer` binary under System Settings → Network →
+     Firewall → Options.
+   - `systemextensionsctl list` for any `NEFilterProvider`/content-inspection
+     extension (Little Snitch, corporate EDR/AV like Bitdefender). Note that
+     toggling one of these "off" in its own app does not reliably unload the
+     underlying extension — a `[activated disabled]` extension can still
+     intercept traffic. A full uninstall via the vendor's own uninstaller is
+     the only fully conclusive test.
+3. **If you need to prove it at the wire level**, capture on the bridge
+   interface during the exact failing request (macOS: `bridge100`; find the
+   right one via the gateway's own `ifconfig`):
+   ```bash
+   sudo tcpdump -i bridge100 -n host <gateway-ip> and port 3128 -w /tmp/cap.pcap
+   ```
+   A completed handshake plus an ACKed request, followed by FIN+RST with the
+   response side's sequence number never advancing past 1 (i.e. zero response
+   bytes ever written), combined with **no trace log at all** for that
+   request, is conclusive: something completed the TCP handshake *on behalf
+   of* the bind address and closed it — the real process's `Accept()` was
+   never called. Don't stop at "the handshake completed" — a handshake and a
+   byte-level ACK happen entirely in the kernel/network-extension layer and
+   prove nothing about whether the application ever saw the connection.
+4. **What this is *not* — don't waste a round-trip re-checking these once
+   `--trace` already stayed silent:**
+   - **pf state.** `slicer-mac pf apply`/`pf remove` rules are scoped to the
+     `sbox` guest source range only (`.3` and up) — they never match
+     host-originated traffic, and cannot explain a *host* curl failing.
+   - **CA / cert trust.** A CA mismatch fails *after* a successful CONNECT —
+     curl gets `HTTP/1.1 200 Connection established` first, then fails the
+     inner TLS handshake (curl exit `60`, `SSL certificate problem`). It
+     cannot produce an empty reply or an aborted CONNECT (exit `52`/`56`),
+     because the CONNECT response is plain text, written before any
+     certificate logic runs.
+   - **Seal/mk key mismatch.** This fails loudly, at startup — `Open sealed
+     proxy state ...: unwrap data key: cipher: message authentication
+     failed` — and the process never reaches `HTTP listening`. It cannot
+     present as a running proxy that silently drops one request; if the
+     proxy started and logged `HTTP listening`/`HTTPS listening`, the seal
+     key is fine.
+   - **A stale/duplicate process on the port.** Cheap to check
+     (`lsof -nP -iTCP:3128 -sTCP:LISTEN`) but don't assume it without
+     checking — a single PID owning both ports is common and doesn't rule
+     out the above; it just means one process, not several, is (or isn't)
+     seeing the traffic.
+5. **Isolating port number vs. protocol vs. destination**, if none of the
+   above resolves it: `--http-port`/`--https-port` are freely reassignable.
+   Test the identical plaintext request on a random high port (isolates
+   "is 3128 specifically flagged as a known proxy port") separately from
+   testing the TLS listener (isolates "is it plaintext content inspection
+   specifically"). Change one variable at a time.
+
 ## Notes
 
 - **Linux: isolated mode only.** In bridge mode VMs have direct NAT egress and skip the proxy — rules then do nothing.
