@@ -30,6 +30,15 @@ Move a git worktree or repository into a Slicer microVM with a working, self-con
 
 Filter, audit, and inject secrets into HTTP(S) egress from Slicer microVMs with Slicer Proxy. Covers default-deny allow rules (host / path / method / port / TTL), credential injection (Bearer, Basic, and OAuth for Claude/Codex/Copilot/xAI), audit mode for path discovery, and TCP passthrough — on both Linux and macOS.
 
+### use-docker
+
+`skills/use-docker`
+
+Install a current Docker Engine release on Ubuntu, Debian, or a Slicer VM with
+Docker's official installer, configure non-root access for the `ubuntu` user,
+and use Docker, Compose, builds, and container runs. Avoids lagging
+distribution-packaged Docker versions.
+
 ### use-s3-rustfs
 
 `skills/use-s3-rustfs`
@@ -62,6 +71,7 @@ This installs the skills into whichever AI coding agents you have (Claude Code, 
 /plugin install use-slicer@slicer
 /plugin install use-slicer-worktrees@slicer
 /plugin install use-slicer-proxy@slicer
+/plugin install use-docker@slicer
 /plugin install use-s3-rustfs@slicer
 /plugin install use-k3sup@slicer
 ```

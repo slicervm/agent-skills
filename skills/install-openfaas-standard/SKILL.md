@@ -19,6 +19,8 @@ export PATH=$PATH:$HOME/.arkade/bin
 mkdir -p ~/.kube
 k3sup install --local --local-path ~/.kube/config --k3s-extra-args '--disable traefik'
 export KUBECONFIG=$HOME/.kube/config
+curl -LSs https://get.docker.com | sudo bash
+sudo usermod -aG docker ubuntu
 sudo systemctl start docker
 ```
 

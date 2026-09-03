@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
   "name": "slicer",
-  "description": "SlicerVM skills for Claude Code: Linux microVM workflows, git worktrees in VMs, filtered egress proxy, RustFS S3-compatible storage, and k3sup Kubernetes provisioning.",
+  "description": "SlicerVM skills for Claude Code: Linux microVM workflows, git worktrees in VMs, Docker, filtered egress proxy, RustFS S3-compatible storage, and k3sup Kubernetes provisioning.",
   "owner": {
     "name": "SlicerVM"
   },
@@ -46,6 +46,20 @@
       "repository": "https://github.com/slicervm/agent-skills",
       "license": "MIT",
       "keywords": ["slicer", "proxy", "egress", "secrets", "security", "microvm", "firewall"],
+      "strict": false
+    },
+    {
+      "name": "use-docker",
+      "source": "./",
+      "skills": ["./skills/use-docker"],
+      "description": "Install and use a current Docker Engine release on Ubuntu, Debian, and Slicer VMs with Docker's official installer and non-root access.",
+      "author": {
+        "name": "SlicerVM"
+      },
+      "homepage": "https://github.com/slicervm/agent-skills",
+      "repository": "https://github.com/slicervm/agent-skills",
+      "license": "MIT",
+      "keywords": ["docker", "containers", "compose", "ubuntu", "debian", "slicer", "vm"],
       "strict": false
     },
     {
