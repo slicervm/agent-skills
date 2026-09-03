@@ -63,7 +63,7 @@ Useful flags on `wt push`:
 | `--launch` | Provision a fresh VM before pushing |
 | `--depth N` | Shallow clone — much faster for large repos |
 | `--force` / `-f` | Re-push into a VM that already has the worktree (wipes the VM-side copy first) |
-| `--hostgroup NAME` | Host group for `--launch` |
+| `--hostgroup NAME` | Host group for `--launch` — auto-selected only when the daemon has exactly one; required when several exist (Slicer for Mac ships with `slicer` and `sbox`, so pass e.g. `--hostgroup sbox`) |
 | `--tag key=value` | Extra tags on the launched VM, or tags to match when `vm` is omitted |
 | `--persistent` | Keep VM state across shutdown/restart; default `true` |
 | `--rm` | Make the launched VM ephemeral, discarding state on stop/delete |
@@ -125,6 +125,7 @@ cd ~/src/myrepo
 git worktree add ../myrepo-feature -b feature
 cd ../myrepo-feature
 slicer wt push --launch .     # note the VM name it prints; persistent by default
+                              # add --hostgroup sbox if the daemon has more than one host group
 # ...work in the VM and commit there...
 slicer wt pull <vm> .
 git push
