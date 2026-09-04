@@ -61,11 +61,16 @@ with two panes instead, and one wide xterm:
 tmux new-session -d -s demo -x 200 -y 50
 tmux split-window -h -t demo
 tmux setw -t demo synchronize-panes off   # ensure keystrokes are NOT mirrored
-# address panes by index, verify they are independent BEFORE recording:
-tmux send-keys -t demo.0 'AAA'; tmux send-keys -t demo.1 'BBB'
-tmux capture-pane -t demo.0 -p | tail -1   # must show AAA only
-tmux capture-pane -t demo.1 -p | tail -1   # must show BBB only
+# address panes by explicit session:window.pane, and verify they are
+# independent BEFORE recording:
+tmux send-keys -t demo:0.0 'AAA'; tmux send-keys -t demo:0.1 'BBB'
+tmux capture-pane -t demo:0.0 -p | tail -1   # must show AAA only
+tmux capture-pane -t demo:0.1 -p | tail -1   # must show BBB only
 ```
+
+Use the full `session:window.pane` target (`demo:0.0`, not `demo.0`) — the
+colon-less form is parsed as a window in the current session and can miss
+the pane you created.
 
 Why: two separate sessions each attached by its own xterm can end up
 receiving **every** keystroke on **both** — `send-keys -t left` lands in
@@ -118,7 +123,7 @@ problem, not a recording problem.
 shell, then by the remote `slicer vm exec`, then by tmux — unbalanced
 quotes and `EOF while looking for matching '` are near-certain. Write the
 whole client sequence to a `demo.sh`, copy it into the VM, and
-`send-keys -t demo.1 './demo.sh'`. The composer shows one clean command
+`send-keys -t demo:0.1 './demo.sh'`. The composer shows one clean command
 and there is nothing to mis-quote.
 
 Frame 1 is then the prompt already in the input box, and the model's
@@ -193,7 +198,7 @@ report shows a middle gap `(A, B)`, cut the two live spans and concat them:
 
 ```bash
 ffmpeg -y -i raw.mp4 -ss 0  -t A       -c:v libx264 -preset fast -pix_fmt yuv420p seg1.mp4
-ffmpeg -y -i raw.mp4 -ss B  -t REST    -c:v libx264 -preset fast -pix_fmt yuv420p seg2.mp4
+ffmpeg -y -i raw.mp4 -ss B  -t DUR_B   -c:v libx264 -preset fast -pix_fmt yuv420p seg2.mp4   # DUR_B = end - B
 printf 'file seg1.mp4\nfile seg2.mp4\n' > concat.txt
 ffmpeg -y -f concat -i concat.txt -c copy final.mp4
 python3 scripts/mad_trim.py final.mp4   # re-verify: dead runs should be empty
