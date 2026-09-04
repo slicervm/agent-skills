@@ -89,11 +89,21 @@ that `-t left`/`-t right` are isolated.
 
 ## Step 3 — xterms on the display
 
+**Per-agent `left`/`right` layout** — one xterm per session:
+
 ```bash
 DISPLAY=:99 setsid xterm -bg black -fg '#d4d4d4' -fa 'DejaVu Sans Mono' -fs 14 \
   -geometry 73x41+0+0 -e tmux attach -t left </dev/null >/dev/null 2>&1 &
 DISPLAY=:99 setsid xterm -bg black -fg '#d4d4d4' -fa 'DejaVu Sans Mono' -fs 14 \
   -geometry 73x41+955+0 -e tmux attach -t right </dev/null >/dev/null 2>&1 &
+```
+
+**Split-session two-shell layout (Step 2)** — one wide xterm attached to the
+single `demo` session; the internal `split-window` divider is the visual gap:
+
+```bash
+DISPLAY=:99 setsid xterm -bg black -fg '#d4d4d4' -fa 'DejaVu Sans Mono' -fs 13 \
+  -geometry 200x50+0+0 -e tmux attach -t demo </dev/null >/dev/null 2>&1 &
 ```
 
 - **`-fa 'DejaVu Sans Mono'` together with `-fs`.** `-fs` alone leaves xterm
