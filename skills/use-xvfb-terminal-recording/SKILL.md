@@ -241,7 +241,18 @@ inlets-pro uplink client --url=wss://.../<name> --token=... \
 - `slicer vm exec` with a `… &`-backgrounded GUI hangs the round-trip. Use
   `slicer vm bg exec … --shell=/bin/bash` with `setsid … </dev/null &`, or
   launch from the host when the display is on the host.
-- `ffmpeg -t N` self-terminates; don't also kill it on a timer.
+- `ffmpeg -t N` self-terminates; don't also kill it on a timer. **Never
+  `pkill` the capture** — a killed x11grab leaves an mp4 with no moov atom
+  (`ffprobe` fails, the file is unplayable and untrimmable). Size `-t` to
+  the content plus a few seconds and let it end itself; check
+  `ffprobe -show_entries stream=width,height` before trusting a take.
+- **One take = one self-contained job.** Drive each recording (start
+  ffmpeg → stage → Enter → wait for done) from a single command, not
+  several overlapping background tasks. A completion task from a *previous*
+  take that ends with `send-keys -t <pane> C-c` will fire mid-way through
+  the next take and wipe its staged command, so you record an idle prompt.
+  After staging, re-`capture-pane` to confirm the command is still there
+  immediately before you press Enter.
 - Prompts typed via `send-keys` are eval'd by opencode: keep them free of
   unbalanced quotes (prefer no quotes at all in the prompt body).
 - Model first-token latency is the main dead-lead-in source; the
