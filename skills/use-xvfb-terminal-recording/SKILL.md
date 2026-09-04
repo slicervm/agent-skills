@@ -220,19 +220,33 @@ Better still, avoid the gap at capture time: poll the readiness endpoint
 ## Step 7 — Deliver
 
 Serve a page, not a raw file, through one tunnel so the URL stays stable as
-revisions are swapped:
+revisions are swapped. **Do NOT use `python3 -m http.server` for video** —
+its stdlib handler ignores `Range` headers and always returns `200` with
+the whole file, so the browser cannot seek to any byte it has not already
+buffered (scrubbing ahead is dead). Use a range-capable server such as
+`inlets-pro fileserver`, which answers `206 Partial Content`:
 
 ```bash
-python3 -m http.server 8300 --bind 0.0.0.0 --directory /tmp/opencode &
+# range-capable static server on 127.0.0.1:8300
+inlets-pro fileserver --webroot /tmp/opencode --port 8300 -a &
 inlets-pro cloud create <name>
 inlets-pro uplink client --url=wss://.../<name> --token=... \
   --upstream=<domain>=http://127.0.0.1:8300
 ```
 
+- **`inlets-pro fileserver` concatenates `--port` onto `--data-addr`.**
+  Passing both `--data-addr 127.0.0.1:8300` and `--port 8300` binds the
+  bogus `83008300`. Use `--port 8300` alone and leave `--data-addr` (default
+  `127.0.0.1:`) portless.
+- **Re-mux each video with `+faststart`** so the `moov` atom sits at the
+  front (ffmpeg writes it at the end by default), letting the player seek
+  before the whole file downloads: `ffmpeg -i in.mp4 -c copy -movflags
+  +faststart out.mp4`.
 - **Back up the previous video and index.html before swapping.**
 - Point `index.html`'s `<video src>` at the new file.
-- Verify locally (`curl 127.0.0.1:8300/`) and publicly (ranged GET of the
-  video).
+- Verify locally and publicly with a **deep ranged GET** — it must return
+  `206`, not `200`: `curl -o /dev/null -w '%{http_code}\n' -r 300000-400000
+  https://<domain>/take.mp4`.
 
 ## Gotchas
 
