@@ -50,6 +50,30 @@ tmux send-keys -t left 'opencode --auto -m provider/model' Enter
 tmux send-keys -t right 'opencode --auto -m provider/model' Enter
 ```
 
+### Two shells side by side — prefer one split session
+
+The per-session layout above is for **agent** demos, where tools address
+each agent by session name. For a plain **two-shell** split screen (a
+service on the left, a client driving it on the right) use ONE session
+with two panes instead, and one wide xterm:
+
+```bash
+tmux new-session -d -s demo -x 200 -y 50
+tmux split-window -h -t demo
+tmux setw -t demo synchronize-panes off   # ensure keystrokes are NOT mirrored
+# address panes by index, verify they are independent BEFORE recording:
+tmux send-keys -t demo.0 'AAA'; tmux send-keys -t demo.1 'BBB'
+tmux capture-pane -t demo.0 -p | tail -1   # must show AAA only
+tmux capture-pane -t demo.1 -p | tail -1   # must show BBB only
+```
+
+Why: two separate sessions each attached by its own xterm can end up
+receiving **every** keystroke on **both** — `send-keys -t left` lands in
+`right` too, so both composers fill with both commands. A single split
+session sidesteps it and needs only one xterm. Always send distinct
+markers and `capture-pane` each target before you record; never trust
+that `-t left`/`-t right` are isolated.
+
 - opencode: `--auto` auto-approves permission prompts. **Without it the
   agent locks on "⚠ Permission required … Allow once / Allow always /
   Reject" and the demo stalls.** (Equivalent to Claude Code's
@@ -88,6 +112,14 @@ problem, not a recording problem.
    `tmux capture-pane -t left -p | grep '<prompt-word>'`.
 3. **Start ffmpeg.**
 4. **Now press Enter** (`tmux send-keys -t left Enter`).
+
+**Commands with quotes or JSON: send a script, not the literal.** A
+`send-keys` string like a `curl … -d '{"cmd":"…"}'` is re-quoted by your
+shell, then by the remote `slicer vm exec`, then by tmux — unbalanced
+quotes and `EOF while looking for matching '` are near-certain. Write the
+whole client sequence to a `demo.sh`, copy it into the VM, and
+`send-keys -t demo.1 './demo.sh'`. The composer shows one clean command
+and there is nothing to mis-quote.
 
 Frame 1 is then the prompt already in the input box, and the model's
 first-token latency (10–20s+ on reasoning models) is *not* dead screen time.
@@ -151,6 +183,24 @@ state briefly) and a **~3s hold after the last real change** (final summary
 is a good ending). Pairwise 2-frame changes near the end are cursor/LSP
 blink, not story — the script's dead-run report shows them; verify before
 extending the tail.
+
+### Dead *middle*: splice it out with a concat, not a single cut
+
+`mad_trim.py` does one `-ss/-t` window, so it cannot remove a frozen gap in
+the middle — e.g. a service starts, then you wait for it to warm up before
+the client fires, leaving 10s+ of static split-screen. When the dead-run
+report shows a middle gap `(A, B)`, cut the two live spans and concat them:
+
+```bash
+ffmpeg -y -i raw.mp4 -ss 0  -t A       -c:v libx264 -preset fast -pix_fmt yuv420p seg1.mp4
+ffmpeg -y -i raw.mp4 -ss B  -t REST    -c:v libx264 -preset fast -pix_fmt yuv420p seg2.mp4
+printf 'file seg1.mp4\nfile seg2.mp4\n' > concat.txt
+ffmpeg -y -f concat -i concat.txt -c copy final.mp4
+python3 scripts/mad_trim.py final.mp4   # re-verify: dead runs should be empty
+```
+
+Better still, avoid the gap at capture time: poll the readiness endpoint
+(not a blind `sleep`) and trigger the client the instant it is ready.
 
 ## Step 7 — Deliver
 
