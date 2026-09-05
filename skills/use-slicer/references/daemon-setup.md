@@ -138,6 +138,13 @@ sudo journalctl -u slicer-k3s -f --output=cat      # follow logs
 
 **Stop timeout.** With `graceful_shutdown` on, Slicer waits up to ~120s for VMs to power off cleanly when the daemon is told to stop. `--timeout-stop-sec 180` gives it that room.
 
+### Troubleshooting the service
+
+Two symptoms that waste time if you don't know them:
+
+- **Service goes straight to `inactive (dead)`, exit 0, and writes no log.** That is almost always an **unresolved license**. Under `User=root` the daemon reads `/root/.slicer/LICENSE`, and if it isn't there it exits *cleanly and silently* — no error, nothing in `journalctl`. Do not chase it as a tty/systemd/pty problem (it starts fine under `sudo -E slicer up` in an interactive shell because `-E`/`SUDO_USER` resolves *your* `~/.slicer/LICENSE`). Fix: make sure `ExecStart` carries a `--license-file` pointing at a path the service user can read (`slicer service generate --install` does this for you — check it with `grep ExecStart /etc/systemd/system/slicer-<name>.service`).
+- **Restart fails with `Bridge conflict: … already in use … Recovery options: --force`.** Stale bridge/tap state from a previous daemon that didn't shut down cleanly (a hard kill, an SSH-held foreground daemon that dropped, or a host crash). A clean `systemctl stop` releases the bridges, so this only bites after an unclean exit. Recover by adding `--force` to the unit's `ExecStart` (`slicer … up ./slicer.yaml --force`) so each start reclaims stale resources — safe at startup because no VMs are running yet.
+
 To add more host groups, edit them into the same `slicer.yaml` — that does not need a new directory or unit. A second daemon is only warranted when you want genuine isolation (separate API socket, non-overlapping CIDR); then repeat with its own `/root/<hostgroup>/slicer.yaml` and a matching `--name slicer-<hostgroup>`. To stop or disable: `sudo systemctl stop slicer-k3s` / `sudo systemctl disable slicer-k3s`.
 
 ## Start a daemon on a remote machine over SSH
