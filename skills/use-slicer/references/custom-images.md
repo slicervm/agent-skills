@@ -1,10 +1,64 @@
-# Custom Images and Userdata
+# Base Images, Custom Images, and Userdata
 
-## Default images
+## Published base images
 
-- `ghcr.io/openfaasltd/slicer-systemd:5.10.240-x86_64-latest` (full, with Docker/K8s kernel support)
-- `ghcr.io/openfaasltd/slicer-systemd-min:6.1.90-x86_64-latest` (minimal, faster boot)
-- `ghcr.io/openfaasltd/slicer-systemd-arm64:6.1.90-aarch64-latest` (ARM64)
+Choose an image that matches both the daemon's hypervisor and the host
+architecture. The published images currently documented by Slicer are:
+
+| Operating system | Hypervisor | Architecture | Image | Default user |
+|---|---|---|---|---|
+| Ubuntu 22.04 | Firecracker | x86_64 | `ghcr.io/openfaasltd/slicer-systemd:5.10.240-x86_64-latest` | `ubuntu` |
+| Ubuntu 22.04 | Firecracker | x86_64 | `ghcr.io/openfaasltd/slicer-systemd:6.1.90-x86_64-latest` | `ubuntu` |
+| Ubuntu 22.04 | Firecracker | arm64 | `ghcr.io/openfaasltd/slicer-systemd-arm64:6.1.90-aarch64-latest` | `ubuntu` |
+| Ubuntu 22.04 | QEMU | x86_64 | `ghcr.io/openfaasltd/slicer-systemd-ch:6.1.90-x86_64-latest` | `ubuntu` |
+| Ubuntu 24.04 | Firecracker | x86_64 | `ghcr.io/openfaasltd/slicer-systemd-2404:5.10.240-x86_64-latest` | `ubuntu` |
+| Rocky Linux 9 | Firecracker | x86_64 | `ghcr.io/openfaasltd/slicer-systemd-rocky9:5.10.240-x86_64-latest` | `slicer` |
+| Arch Linux | Firecracker | x86_64 | `ghcr.io/openfaasltd/slicer-systemd-archlinux:6.1.90-x86_64-latest` | `slicer` |
+
+Source of truth: <https://docs.slicervm.com/reference/images/>. Check it before
+choosing an image when exact availability matters, because image tags and the
+compatibility matrix can change.
+
+The image belongs to the **daemon configuration**, not an individual VM. Select
+it while generating the configuration:
+
+```bash
+# Rocky Linux 9 on Firecracker/x86_64
+slicer new rocky9 \
+  --image ghcr.io/openfaasltd/slicer-systemd-rocky9:5.10.240-x86_64-latest \
+  > slicer.yaml
+
+# Start the daemon, then launch VMs from that host group.
+sudo -E slicer up ./slicer.yaml
+slicer vm add rocky9
+```
+
+Or set `config.image` in an existing configuration before starting or restarting
+the daemon:
+
+```yaml
+config:
+  host_groups:
+    - name: rocky9
+      # other host-group settings
+  image: ghcr.io/openfaasltd/slicer-systemd-rocky9:5.10.240-x86_64-latest
+```
+
+Do not pass `--image` to `slicer vm add`; that command creates a VM through an
+already configured daemon. Since `config.image` is daemon-wide, use separate
+daemon configurations when different base images must be available at the same
+time. Use the image's default account when paths or SSH commands name the user
+explicitly (`ubuntu` on Ubuntu; `slicer` on Rocky Linux and Arch), and use the
+distribution's package manager (`apt`, `dnf`, or `pacman`) in userdata and
+provisioning commands.
+
+The older minimal Ubuntu image may still be accepted by some Slicer releases,
+but it is not listed in the current published-image reference. Verify it against
+the installed release before relying on it:
+
+```text
+ghcr.io/openfaasltd/slicer-systemd-min:6.1.90-x86_64-latest
+```
 
 ## Building a custom image
 
@@ -22,18 +76,19 @@ slicer vm exec "$VM_NAME" --uid 1000 -- "sudo apt update && sudo apt install -y 
 # 2. Export the disk
 slicer disk export "$VM_NAME" --output my-custom-image.img
 
-# 3. Use it in config
+# 3. Use it in a daemon config
 slicer new mygroup --image ghcr.io/myorg/my-custom-image:latest > config.yaml
-# Or set the image: field in existing YAML
+# Or set config.image in existing YAML
 ```
 
-In YAML config, set the `image:` field under a host group:
+In YAML config, set the top-level `image:` field inside `config`:
 
 ```yaml
 config:
   host_groups:
     - name: mygroup
-      image: ghcr.io/myorg/my-custom-image:latest
+      # other host-group settings
+  image: ghcr.io/myorg/my-custom-image:latest
 ```
 
 ## Userdata (cloud-init style bootstrap)

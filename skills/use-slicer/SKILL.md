@@ -68,7 +68,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/macos.md](references/macos.md) — Slicer for Mac (slicer-mac)
 - [references/daemon-setup.md](references/daemon-setup.md) — generate a config and run your own daemon
 - [references/workflows.md](references/workflows.md) — worked recipes (E2E, Docker, builds, k3s, DB, SSH)
-- [references/custom-images.md](references/custom-images.md) — custom rootfs images and userdata
+- [references/custom-images.md](references/custom-images.md) — select a published Ubuntu, Rocky Linux, or Arch base image; custom rootfs images; and userdata
 - [references/bg-exec.md](references/bg-exec.md) — background exec detail
 - [references/file-transfer.md](references/file-transfer.md) — binary and recursive copies, exclusions, destinations, and legacy-agent compatibility
 - [references/arkade.md](references/arkade.md) — installing CLI tools with `arkade get` (one call, parallel downloads, `tool@version` pinning)
@@ -235,6 +235,12 @@ Use `--json` for machine-readable output.
 ```bash
 slicer vm add HOSTGROUP --url "$SLICER_URL" --token-file "$SLICER_TOKEN_FILE"
 ```
+
+The VM inherits its base image from the daemon configuration; `slicer vm add`
+does not have an image flag. To use Rocky Linux 9, Arch Linux, a different
+Ubuntu release, or another supported hypervisor/architecture image, configure
+`config.image` before starting the daemon. See
+[references/custom-images.md](references/custom-images.md#published-base-images).
 
 The hostgroup argument is optional when only one host group is configured — the SDK resolves it automatically. When there are multiple host groups you must specify one explicitly.
 
@@ -617,9 +623,12 @@ Worked recipes — E2E tests, remote Docker, cross-compiling Go/Rust, k3s cluste
 
 ---
 
-## Custom Images & Userdata
+## Base Images, Custom Images & Userdata
 
-The default image list, building a custom rootfs (`slicer disk export` → OCI image), and userdata (cloud-init style first-boot scripts) are covered in [references/custom-images.md](references/custom-images.md).
+Selecting a compatible published Ubuntu, Rocky Linux, or Arch image, building a
+custom rootfs (`slicer disk export` → OCI image), and userdata (cloud-init style
+first-boot scripts) are covered in
+[references/custom-images.md](references/custom-images.md).
 
 ---
 
@@ -650,7 +659,8 @@ slicer disk sparsify ...       # Reclaim space
 slicer disk transfer ...       # Compress + transfer via lz4
 ```
 
-See [references/custom-images.md](references/custom-images.md) for building a custom rootfs image.
+See [references/custom-images.md](references/custom-images.md) for selecting a
+published base image or building a custom rootfs image.
 
 ---
 

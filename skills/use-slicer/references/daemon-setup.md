@@ -21,7 +21,7 @@ Key flags for `slicer new`:
 | `--address 192.168.1.50` | Pin a specific IP (repeatable, macvtap mode) |
 | `--api-bind 127.0.0.1` | TCP bind (loopback) — auth on by default, keep it |
 | `--socket ./slicer.sock` | Unix socket bind — auth off by default, keep it |
-| `--image ghcr.io/...` | Custom rootfs image |
+| `--image ghcr.io/...` | Daemon-wide published alternative or custom rootfs image; check [custom-images.md](custom-images.md#published-base-images) for OS/backend/architecture compatibility |
 | `--storage image` | Persistent disk mode (default) |
 | `--storage-size 25G` | Disk size |
 | `--ssh-key "ssh-ed25519 ..."` | Inject SSH key |
