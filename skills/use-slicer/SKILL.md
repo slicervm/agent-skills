@@ -466,14 +466,26 @@ slicer vm bg exec VM_REF --uid 1000 -c npm -a run -a dev
 slicer vm bg exec VM_REF --uid 1000 --shell=/bin/bash -- "cd /app && exec npm run dev"
 ```
 
-**Capture exec_id** for later management:
+**Capture exec_id** from JSON for later management. Human-readable output
+uses labels such as `Exec ID`; do not parse it with `awk` or rely on its layout.
+Use `jq` and Bash's `pipefail` to stop the script if launch or ID extraction fails:
 
 ```bash
 VM_REF=devserver # friendly name assigned with --name
-EX=$(slicer vm bg exec "$VM_REF" --uid 1000 --cwd /home/ubuntu/app \
+set -o pipefail
+EX=$(slicer vm bg exec "$VM_REF" --uid 1000 --cwd /home/ubuntu/app --json \
      -- npm run dev \
-     | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
+     | jq -er '.exec_id | select(type == "string" and length > 0)') || exit 1
 ```
+
+Keep `--follow` out of ID capture: it streams subsequent events and waits for
+the child to exit. Attach separately with `bg logs --follow`. Keep stderr
+separate from JSON stdout; do not pipe `2>&1` into `jq`.
+
+If launch may have succeeded but the ID was not captured, inspect
+`slicer vm bg list "$VM_REF" --json` and confirm the command and start time
+with `bg info` before reusing an ID. Do not blindly relaunch or select the
+first entry: another job may already be running.
 
 **Management subcommands:**
 
