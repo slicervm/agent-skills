@@ -15,6 +15,22 @@
 | `--follow` | Stream logs after launch until exit |
 | `--json` | Emit JSON output (for scripting) |
 
+## Capture the launch ID
+
+Use `--json` and extract `.exec_id` with `jq`, as in the examples below.
+Human-readable output uses labels such as `Exec ID`, not `exec_id=...`;
+its layout is not a scripting interface. The examples use Bash's `pipefail`
+and reject missing, empty, or non-string IDs before running management commands.
+
+Do not combine ID capture with `--follow`: it emits further events and stays
+attached until the child exits. Launch detached, save the ID, then use
+`bg logs --follow` separately. Do not merge stderr into JSON stdout with `2>&1`.
+
+If ID capture fails after the job may have launched, use
+`slicer vm bg list "$VM_REF" --json`, then `bg info` to confirm the command
+and start time of the intended job. Recover that ID before continuing; do not
+relaunch blindly or assume the first listed process belongs to this task.
+
 ## Ring buffer
 
 - Stdout + stderr captured into a per-process ring buffer (default 1 MiB, ~10 000 lines).
@@ -36,45 +52,48 @@
 ## Example: dev server with port forward
 
 ```bash
-VM_HOSTNAME=dev-1
+VM_REF=dev-1
 
 # Start the dev server in background (explicit form — preferred for agents)
-EX=$(slicer vm bg exec "$VM_HOSTNAME" --uid 1000 --cwd /home/ubuntu/app \
+set -o pipefail
+EX=$(slicer vm bg exec "$VM_REF" --uid 1000 --cwd /home/ubuntu/app --json \
      -c npm -a run -a dev \
-     | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
+     | jq -er '.exec_id | select(type == "string" and length > 0)') || exit 1
 
 # Port-forward to access it from the host
-slicer vm forward "$VM_HOSTNAME" -L 3000:127.0.0.1:3000 &
+slicer vm forward "$VM_REF" -L 3000:127.0.0.1:3000 &
 
 # Check logs later
-slicer vm bg logs "$VM_HOSTNAME" "$EX" --follow
+slicer vm bg logs "$VM_REF" "$EX" --follow
 
 # When done, stop and clean up
-slicer vm bg kill "$VM_HOSTNAME" "$EX"
-slicer vm bg wait "$VM_HOSTNAME" "$EX" --timeout 10s
-slicer vm bg remove "$VM_HOSTNAME" "$EX"
+slicer vm bg kill "$VM_REF" "$EX"
+slicer vm bg wait "$VM_REF" "$EX" --timeout 10s
+slicer vm bg remove "$VM_REF" "$EX"
 ```
 
-Slicer CLI 0.1.210 requires the canonical hostname for `bg kill`; its other
-background management commands accept a friendly name. Keep canonical
-hostnames returned by launch for lifecycle and cleanup operations.
+CLI 0.1.216 and later accept friendly names across background management
+commands. `VM_REF` can be the friendly name assigned with `--name` or the
+canonical hostname. Update older clients which require a canonical hostname
+for `bg kill`.
 
 ## Example: long-running build
 
 ```bash
-VM_NAME=build-1
+VM_REF=build-1
 
 # Launch build, follow output until it exits (CLI exit code = child exit code)
-slicer vm bg exec "$VM_NAME" --uid 1000 --ring-bytes 4M --follow \
+slicer vm bg exec "$VM_REF" --uid 1000 --ring-bytes 4M --follow \
   -- docker build -t myapp:latest .
 
 # Or launch detached and wait for it
-EX=$(slicer vm bg exec "$VM_NAME" --uid 1000 --ring-bytes 4M \
+set -o pipefail
+EX=$(slicer vm bg exec "$VM_REF" --uid 1000 --ring-bytes 4M --json \
      -- make build-all \
-     | awk -F'[= ]' '/exec_id=/ {for (i=1;i<=NF;i++) if ($i=="exec_id") print $(i+1)}')
+     | jq -er '.exec_id | select(type == "string" and length > 0)') || exit 1
 
 # Do other work, then check back
-slicer vm bg wait "$VM_NAME" "$EX" --timeout 30m
-slicer vm bg logs "$VM_NAME" "$EX"       # dump final output
-slicer vm bg remove "$VM_NAME" "$EX"     # reap
+slicer vm bg wait "$VM_REF" "$EX" --timeout 30m
+slicer vm bg logs "$VM_REF" "$EX"       # dump final output
+slicer vm bg remove "$VM_REF" "$EX"     # reap
 ```
