@@ -1,6 +1,6 @@
 ---
 name: use-slicer
-description: Use Slicer to launch, name, tag, prepare, and cold-fork Linux microVMs for sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, and isolated development — works from macOS and Linux hosts
+description: Use Slicer to launch, name, tag, prepare, benchmark, and cold-fork Linux microVMs for sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, and isolated development — works from macOS and Linux hosts
 allowed-tools: Bash
 ---
 
@@ -79,6 +79,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/vm-names-and-tags.md](references/vm-names-and-tags.md) — friendly CLI names, canonical hostnames, mutable tags, and raw API lookup
 - [references/agent-sandboxes.md](references/agent-sandboxes.md) — coding-agent sandbox detail
 - [references/cold-forking.md](references/cold-forking.md) — cache a prepared builder and fork clean runners
+- [references/benchmarking.md](references/benchmarking.md) — benchmark concurrent VM launch latency, choose concurrency and wait modes, and interpret summaries, observations, and receipts
 
 Companion skills: **`use-slicer-worktrees`** (git worktrees in a VM), **`use-slicer-proxy`** (filtered egress + secret injection).
 
@@ -594,6 +595,13 @@ slicer vm top                 # Live metrics for all VMs
 slicer vm top VM_REF          # Live metrics for one VM
 slicer vm logs VM_REF         # Boot/console log (--lines N)
 ```
+
+### Benchmarking VM launches
+
+For concurrent VM launch benchmarks, use `slicer bench`. Read
+[references/benchmarking.md](references/benchmarking.md) before running it;
+the reference covers dedicated setup, measurement modes, per-run cleanup,
+JSON output, and comparable result reporting.
 
 ---
 
