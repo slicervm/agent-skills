@@ -1,6 +1,6 @@
 ---
 name: use-slicer
-description: Use Slicer to launch, name, tag, prepare, and cold-fork Linux microVMs for sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, and isolated development — works from macOS and Linux hosts
+description: Use Slicer to launch, name, tag, prepare, and cold-fork Linux microVMs for declarative project environments with slicer env, sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, and isolated development — works from macOS and Linux hosts
 allowed-tools: Bash
 ---
 
@@ -25,6 +25,19 @@ Docs: https://docs.slicervm.com
 Go SDK: https://github.com/slicervm/sdk (`github.com/slicervm/sdk`)
 
 On macOS, the CLI drives **Slicer for Mac** — a persistent Linux VM plus an `sbox` host group for sandboxes. See [references/macos.md](references/macos.md).
+
+## Project environments: slicer env
+
+For a repository's repeatable development environment, start with its
+`slicer.yaml` and `slicer env`. This is Slicer's alternative to the
+Dockerfile/Compose workflow: setup, a copied workspace, systemd services,
+readiness checks, and forwarding in a Linux VM.
+
+Read [references/environments.md](references/environments.md) before using
+`env up`, `push`, `push --watch`, `pull`, or `down`. It covers config, the edit
+loop, file placement, service updates, forwarding, and teardown. Prefer this
+project workflow over assembling ad hoc launch/copy/exec commands when the
+repository already defines an environment.
 
 ## Install or update Slicer itself
 
@@ -65,6 +78,7 @@ setup, dependencies, storage backends, licensing, and daemon installation.
 
 Deeper material is split into reference files — read the relevant one when a task calls for it:
 
+- [references/environments.md](references/environments.md) — project `slicer.yaml`, setup/init, services, push/watch/pull, and forwarding
 - [references/macos.md](references/macos.md) — Slicer for Mac (slicer-mac)
 - [references/daemon-setup.md](references/daemon-setup.md) — generate a config and run your own daemon
 - [references/workflows.md](references/workflows.md) — worked recipes (E2E, Docker, builds, k3s, DB, SSH)
