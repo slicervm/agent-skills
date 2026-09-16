@@ -13,7 +13,8 @@ Teach your AI coding agent how to launch, manage, and work with Slicer microVMs 
 
 Comprehensive skill covering the full Slicer workflow — connecting to daemons
 (macOS, Linux, hosted box), creating and naming VMs, managing mutable tags,
-cold forking prepared builders, running commands, copying files, port
+declarative project environments with `slicer env`, cold forking prepared
+builders, running commands, copying files, port
 forwarding, agent sandboxes, and more.
 
 Works from macOS (via slicer-mac) and Linux hosts.
