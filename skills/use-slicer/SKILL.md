@@ -390,6 +390,7 @@ Key flags:
 | `--cwd string` | Set working directory (`~` and `~/path` supported, `../` traversal is blocked) |
 | `--env stringArray` | Pass environment variables as `KEY=VALUE` pairs (repeatable) |
 | `--shell ""` | Skip shell interpreter, exec directly |
+| `--stdin` | Force local stdin to stream; `--stdin=false` never attaches it |
 
 `--cwd` and `--env` are direct `slicer vm exec` flags (confirmed from `slicer vm exec --help`).
 
@@ -407,6 +408,17 @@ cat script.sh | slicer vm exec VM_REF -- "bash"
 
 # Pipes inside VM
 slicer vm exec VM_REF -- "ps aux | grep nginx"
+```
+
+Stdin is attached automatically when it is redirected from a file, or when it
+is a pipe or socket that already holds input or has been closed. An idle pipe
+is skipped, because an agent harness often hands its children a pipe on stdin
+that never carries data. Pass `--stdin` when the command must read from a
+producer that has not written yet, otherwise that input is dropped and the
+command sees empty stdin:
+
+```bash
+docker save alpine:latest | slicer vm exec VM_REF --stdin -- docker load
 ```
 
 ### Create scripts and configuration files safely
@@ -707,5 +719,6 @@ slicer activate         # Legacy command for GitHub Sponsors and for trial users
 | Permission denied | Use `sudo` for unix socket access, or verify `--token-file`/`--token` and local TCP credentials |
 | VM not responding | `slicer vm ready VM_REF --timeout 60s` |
 | Command hangs | Long-running processes block `vm exec` — use `slicer vm bg exec` instead |
+| `--stdin` never returns | The guest agent in that VM predates the stdin fix and waits for stdin EOF — update `slicer-agent` in the image, or drop `--stdin` and let auto-detection skip the idle pipe |
 | Stale state | Delete `.img` and `.lock` files to reset persistent disks |
 | `invalid mode: cp-v1-*` | Update the Slicer CLI to a build using Go SDK v0.0.67 or later; compatibility fallback is client-side, so do not patch the daemon or guest first |
