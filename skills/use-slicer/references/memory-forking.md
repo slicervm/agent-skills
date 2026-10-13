@@ -124,6 +124,10 @@ CHILD=$(slicer vm fork "$COMMIT" \
 slicer vm exec "$CHILD" -- "hostname && cat /etc/machine-id"
 ```
 
+`--name` assigns a friendly CLI name through the child's `name=` tag; it does
+not choose the canonical hostname. Slicer still allocates that hostname, and
+the command captures it from `.hostname` for API and diagnostic use.
+
 The source and every child have independent writable disks. Reuse the same
 commit for concurrent children and capture each JSON response separately; do
 not infer allocator hostnames from list order.
@@ -161,8 +165,9 @@ slicer vm restore "$CHILD" --wait agent
 This continues the same child from its saved RAM and process state. Repeating
 suspend and restore is supported.
 
-An ordinary shutdown of a persistent child followed by `slicer relaunch`
+An ordinary shutdown of a persistent child followed by `slicer vm relaunch`
 cold-boots that child's private disk; it does not resume the captured RAM.
+The root-level `slicer relaunch` alias is equivalent.
 
 A memory-fork child cannot currently become another reusable memory parent.
 `slicer vm commit "$CHILD" --memory` returns `409 Conflict`. Reuse the original
