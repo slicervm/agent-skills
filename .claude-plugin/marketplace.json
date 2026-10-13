@@ -10,7 +10,7 @@
       "name": "use-slicer",
       "source": "./",
       "skills": ["./skills/use-slicer"],
-      "description": "Use Slicer to launch, name, tag, and manage Linux microVMs for sandboxed builds, E2E tests, Docker, CI, and isolated development — works from macOS and Linux hosts",
+      "description": "Use Slicer to launch, prepare, cold-fork, memory-fork, and manage Linux microVMs for sandboxed builds, E2E tests, Docker, CI, and isolated development — works from macOS and Linux hosts",
       "author": {
         "name": "SlicerVM"
       },

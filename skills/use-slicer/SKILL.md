@@ -1,6 +1,6 @@
 ---
 name: use-slicer
-description: Use Slicer to launch, name, tag, prepare, and cold-fork Linux microVMs for declarative project workspaces with slicer workspace, sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, and isolated development — works from macOS and Linux hosts
+description: Use Slicer to launch, name, tag, prepare, cold-fork, and memory-fork Linux microVMs for declarative project workspaces with slicer workspace, sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, and isolated development — works from macOS and Linux hosts
 allowed-tools: Bash
 ---
 
@@ -17,6 +17,7 @@ Virtualization on macOS. Use it when you need:
 - GPU/PCI passthrough workloads (via cloud-hypervisor backend)
 - Automated code review pipelines in ephemeral microVMs
 - Preparing one builder VM, then cold-forking clean runners without repeating setup
+- Checkpointing a prepared running VM, then memory-forking its warm processes
 - Running coding agents in isolated microVMs (Amp, Claude Code, Codex, OpenCode, GitHub Copilot CLI) then copying out the outcome - code, files, reports, binaries, images, etc.
 
 VMs boot in 1–3 seconds, have full systemd, internet access, and SSH pre-installed.
@@ -93,6 +94,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/vm-names-and-tags.md](references/vm-names-and-tags.md) — friendly CLI names, canonical hostnames, mutable tags, and raw API lookup
 - [references/agent-sandboxes.md](references/agent-sandboxes.md) — coding-agent sandbox detail
 - [references/cold-forking.md](references/cold-forking.md) — cache a prepared builder and fork clean runners
+- [references/memory-forking.md](references/memory-forking.md) — checkpoint a running Firecracker VM and fork its warm processes
 
 Companion skills: **`use-slicer-worktrees`** (git worktrees in a VM), **`use-slicer-proxy`** (filtered egress + secret injection).
 
@@ -611,6 +613,26 @@ bridge-mode forks inherit their host group's networking.
 
 For cache hits, no-egress runners, cleanup, and agent-safety notes, read
 [references/cold-forking.md](references/cold-forking.md).
+
+### Memory fork a prepared running VM
+
+On Linux amd64, a Firecracker VM using isolated networking and `image`
+storage can be checkpointed while running. Each fork resumes the captured
+processes and memory state:
+
+```bash
+COMMIT=$(slicer vm commit "$SOURCE" --memory \
+  --tag "workflow=$WORKFLOW" --json | jq -r '.commit_id')
+CHILD=$(slicer vm fork "$COMMIT" \
+  --tag "workflow=$WORKFLOW" --json | jq -r '.hostname')
+```
+
+The source must use Firecracker 1.17.0 or newer and a guest agent with memory
+fork finalisation support. The default fork command waits for the child to be
+personalised and ready. Memory forks copy application state as well as useful
+warm state, so read [references/memory-forking.md](references/memory-forking.md)
+before preparing the source, handling credentials, using `--no-wait`, or
+suspending and restoring children.
 
 ### Monitoring
 
