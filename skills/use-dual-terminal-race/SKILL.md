@@ -62,8 +62,8 @@ Correct it to the LAN-reachable address (e.g. `http://192.168.1.14:8900/v1`),
 write the corrected config locally, then:
 
 ```bash
-slicer vm cp ./opencode-vm.json ds:~/.config/opencode/opencode.json --uid 1000
-slicer vm cp ./opencode-vm.json qw:~/.config/opencode/opencode.json --uid 1000
+slicer vm cp ./opencode-vm.json ds:~/.config/opencode/opencode.json
+slicer vm cp ./opencode-vm.json qw:~/.config/opencode/opencode.json
 ```
 
 **Pin the model explicitly with `-m provider/model` at launch** — do not rely
@@ -89,8 +89,8 @@ relevant skill in so each model follows a verified flow but keeps its
 liberties:
 
 ```bash
-slicer vm cp ./SKILL.md ds:~/.config/opencode/skills/use-k3s/SKILL.md --uid 1000
-slicer vm cp ./SKILL.md qw:~/.config/opencode/skills/use-k3s/SKILL.md --uid 1000
+slicer vm cp ./SKILL.md ds:~/.config/opencode/skills/use-k3s/SKILL.md
+slicer vm cp ./SKILL.md qw:~/.config/opencode/skills/use-k3s/SKILL.md
 ```
 
 Verify discovery: `slicer vm exec ds -- 'cd ~ && opencode debug skill'`.

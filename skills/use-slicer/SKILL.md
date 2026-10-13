@@ -134,10 +134,10 @@ else
 fi
 
 # Keep using the friendly reference, not the generated hostname.
-slicer vm exec "$VM_REF" --uid 1000 -- "uname -a"
-slicer vm cp ./local.txt "$VM_REF":/tmp/local.txt --uid 1000
+slicer vm exec "$VM_REF" -- "uname -a"
+slicer vm cp ./local.txt "$VM_REF":/tmp/local.txt
 # for longer interactive work, open a shell session instead of repeating many one-off execs:
-slicer vm shell "$VM_REF" --uid 1000
+slicer vm shell "$VM_REF"
 
 # use exec for deterministic one-liners; use shell for ongoing interactive workflows
 ```
@@ -379,7 +379,7 @@ Anti-pattern: `slicer vm exec ... -- /bin/bash -lc "..."` (unless required for n
 The default user is auto-detected (typically `ubuntu`, uid 1000). Override with `--uid`:
 
 ```bash
-slicer vm exec VM_REF --uid 1000 -- "sudo apt update && sudo apt install -y nginx"
+slicer vm exec VM_REF -- "sudo apt update && sudo apt install -y nginx"
 ```
 
 Key flags:
@@ -396,7 +396,7 @@ Key flags:
 Example:
 
 ```bash
-slicer vm exec VM_REF --uid 1000 --cwd ~/project --env FOO=bar --env DEBUG=1 -- "env | sort | head -n 5"
+slicer vm exec VM_REF --cwd ~/project --env FOO=bar --env DEBUG=1 -- "env | sort | head -n 5"
 ```
 
 Pipes and stdin work:
@@ -418,8 +418,8 @@ the VM. Do not construct them with an interactive heredoc or one tmux
 ```bash
 # Create or edit setup.sh locally using the agent's normal file-editing tool.
 slicer vm cp ./setup.sh VM_REF:/home/ubuntu/setup.sh \
-  --uid 1000 --permissions 0755
-slicer vm exec VM_REF --uid 1000 --shell="" -- \
+  --permissions 0755
+slicer vm exec VM_REF --shell="" -- \
   /bin/bash -n /home/ubuntu/setup.sh
 ```
 
@@ -457,13 +457,13 @@ Do **not** use `slicer vm exec ... &` — that ties the child to the local shell
 
 ```bash
 # 1. Positional — separate tokens after --
-slicer vm bg exec VM_REF --uid 1000 -- npm run dev
+slicer vm bg exec VM_REF -- npm run dev
 
 # 2. Explicit — preferred for agents
-slicer vm bg exec VM_REF --uid 1000 -c npm -a run -a dev
+slicer vm bg exec VM_REF -c npm -a run -a dev
 
 # 3. Shell — opt-in for $VAR, pipes, &&
-slicer vm bg exec VM_REF --uid 1000 --shell=/bin/bash -- "cd /app && exec npm run dev"
+slicer vm bg exec VM_REF --shell=/bin/bash -- "cd /app && exec npm run dev"
 ```
 
 **Capture exec_id** from JSON for later management. Human-readable output
@@ -473,7 +473,7 @@ Use `jq` and Bash's `pipefail` to stop the script if launch or ID extraction fai
 ```bash
 VM_REF=devserver # friendly name assigned with --name
 set -o pipefail
-EX=$(slicer vm bg exec "$VM_REF" --uid 1000 --cwd /home/ubuntu/app --json \
+EX=$(slicer vm bg exec "$VM_REF" --cwd /home/ubuntu/app --json \
      -- npm run dev \
      | jq -er '.exec_id | select(type == "string" and length > 0)') || exit 1
 ```
@@ -513,9 +513,9 @@ See [references/bg-exec.md](references/bg-exec.md) for the full flag table, ring
 ## File Transfer
 
 ```bash
-slicer vm cp ./local-file.txt VM_REF:/tmp/file.txt --uid 1000
+slicer vm cp ./local-file.txt VM_REF:/tmp/file.txt
 slicer vm cp VM_REF:/etc/os-release ./os-release.txt
-slicer cp -r ./my-project/ VM_REF:/home/ubuntu/project/ --uid 1000
+slicer cp -r ./my-project/ VM_REF:/home/ubuntu/project/
 ```
 
 Use binary mode without `-r` for one file. Always use `-r` / `--recursive`
@@ -691,7 +691,7 @@ slicer activate         # Legacy command for GitHub Sponsors and for trial users
 
 ## Important Notes
 
-1. **Default user**: uid auto-detected (ubuntu/1000). Use `--uid 1000` to be explicit. On non-Ubuntu images, the user is `slicer`
+1. **Default user**: auto-detected as the image's non-root user (`ubuntu` on Ubuntu images, `slicer` on Rocky Linux and Arch). Don't pass `--uid` unless you need another user, i.e. `--uid 0` for root.
 2. **First boot pulls image**: may take 30–60s on first run; subsequent boots are 1–3s.
 3. **Port forwards block**: run them in background with `&`.
 4. **Internet access**: VMs have outbound internet by default (bridge mode).

@@ -5,11 +5,11 @@ Use binary mode for one file and recursive tar mode for directories.
 ## Single files
 
 ```bash
-slicer vm cp ./local-file.txt VM_NAME:/tmp/file.txt --uid 1000
+slicer vm cp ./local-file.txt VM_NAME:/tmp/file.txt
 slicer vm cp VM_NAME:/etc/os-release ./os-release.txt
 
 slicer vm cp ./script.sh VM_NAME:/tmp/script.sh \
-  --mode=binary --permissions 0755 --uid 1000
+  --mode=binary --permissions 0755
 ```
 
 ## Multi-line scripts and configuration files
@@ -22,14 +22,14 @@ misdirect the body or terminator.
 
 ```bash
 # Edit record-capture-pane.sh locally, then transfer it atomically.
-slicer vm exec VM_NAME --uid 1000 -- \
+slicer vm exec VM_NAME -- \
   "mkdir -p /home/ubuntu/record-scripts"
 slicer vm cp ./record-capture-pane.sh \
   VM_NAME:/home/ubuntu/record-scripts/record-capture-pane.sh \
-  --uid 1000 --permissions 0755
+  --permissions 0755
 
 # Verify before running it.
-slicer vm exec VM_NAME --uid 1000 --shell="" -- \
+slicer vm exec VM_NAME --shell="" -- \
   /bin/bash -n /home/ubuntu/record-scripts/record-capture-pane.sh
 ```
 
@@ -37,7 +37,7 @@ If `vm cp` is unsuitable, stream an already-complete local file through one
 non-interactive request instead of typing its contents into a PTY:
 
 ```bash
-slicer vm exec VM_NAME --uid 1000 -- \
+slicer vm exec VM_NAME -- \
   "cat > /home/ubuntu/record-scripts/record-capture-pane.sh" \
   < ./record-capture-pane.sh
 ```
@@ -63,7 +63,7 @@ A running binary cannot be overwritten in place — `vm cp` to the live path can
 fail. Copy to a temp name, then move it into place:
 
 ```bash
-slicer vm cp ./superterm VM_NAME:/home/ubuntu/superterm.new --uid 1000
+slicer vm cp ./superterm VM_NAME:/home/ubuntu/superterm.new
 slicer vm exec VM_NAME -- "mv /home/ubuntu/superterm.new /home/ubuntu/superterm && chmod +x /home/ubuntu/superterm"
 ```
 
@@ -75,7 +75,7 @@ currently executing.
 Always pass `-r` / `--recursive` for a directory in either direction:
 
 ```bash
-slicer cp -r ./my-project/ VM_NAME:/home/ubuntu/project/ --uid 1000
+slicer cp -r ./my-project/ VM_NAME:/home/ubuntu/project/
 slicer cp -r VM_NAME:/home/ubuntu/project/results/ ./results/
 ```
 
@@ -87,7 +87,7 @@ were flattened into the destination.
 ## Exclusions
 
 ```bash
-slicer cp -r ./src/ VM_NAME:/home/ubuntu/src/ --uid 1000 \
+slicer cp -r ./src/ VM_NAME:/home/ubuntu/src/ \
   --exclude '**/.git/**' --exclude '**/node_modules/**'
 ```
 

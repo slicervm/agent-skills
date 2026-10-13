@@ -56,7 +56,7 @@ VM_REF=dev-1
 
 # Start the dev server in background (explicit form — preferred for agents)
 set -o pipefail
-EX=$(slicer vm bg exec "$VM_REF" --uid 1000 --cwd /home/ubuntu/app --json \
+EX=$(slicer vm bg exec "$VM_REF" --cwd /home/ubuntu/app --json \
      -c npm -a run -a dev \
      | jq -er '.exec_id | select(type == "string" and length > 0)') || exit 1
 
@@ -83,12 +83,12 @@ for `bg kill`.
 VM_REF=build-1
 
 # Launch build, follow output until it exits (CLI exit code = child exit code)
-slicer vm bg exec "$VM_REF" --uid 1000 --ring-bytes 4M --follow \
+slicer vm bg exec "$VM_REF" --ring-bytes 4M --follow \
   -- docker build -t myapp:latest .
 
 # Or launch detached and wait for it
 set -o pipefail
-EX=$(slicer vm bg exec "$VM_REF" --uid 1000 --ring-bytes 4M --json \
+EX=$(slicer vm bg exec "$VM_REF" --ring-bytes 4M --json \
      -- make build-all \
      | jq -er '.exec_id | select(type == "string" and length > 0)') || exit 1
 
