@@ -71,7 +71,7 @@ ghcr.io/openfaasltd/slicer-systemd-min:6.1.90-x86_64-latest
 # 1. Start a VM, customise it
 VM_NAME=$(slicer vm add demo | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
-slicer vm exec "$VM_NAME" --uid 1000 -- "sudo apt update && sudo apt install -y docker.io nginx golang"
+slicer vm exec "$VM_NAME" -- "sudo apt update && sudo apt install -y docker.io nginx golang"
 
 # 2. Export the disk
 slicer disk export "$VM_NAME" --output my-custom-image.img

@@ -31,12 +31,12 @@ Always launch API-created microVMs into the explicit `sbox` host group — the `
 ```bash
 VM_NAME=$(slicer vm add sbox --tag "workflow=smoke" | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
-slicer vm exec "$VM_NAME" --uid 1000 -- "uname -a"
+slicer vm exec "$VM_NAME" -- "uname -a"
 
 # Ephemeral sandbox
 VM_NAME=$(slicer vm add sbox --persistent=false | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
-slicer vm exec "$VM_NAME" --uid 1000 -- "make test"
+slicer vm exec "$VM_NAME" -- "make test"
 slicer vm delete "$VM_NAME"
 ```
 

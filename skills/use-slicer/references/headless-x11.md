@@ -36,7 +36,7 @@ slicer vm exec "$VM_NAME" --uid 0 -- \
 ## Starting Xvfb
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset & \
    export DISPLAY=:99"
 ```
@@ -51,14 +51,14 @@ Flags:
 For a one-shot command, use `xvfb-run` instead:
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "xvfb-run xterm -e bash -c 'echo hello; sleep 5'"
 ```
 
 ## Running xterm
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "DISPLAY=:99 xterm -bg black -fg '#d4d4d4' -fa 'DejaVu Sans Mono' -fs 14 \
      -geometry 100x35 -e bash &"
 ```
@@ -78,7 +78,7 @@ installed.
 ## Capturing with ffmpeg
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "DISPLAY=:99 ffmpeg -f x11grab -video_size 1920x1080 -i :99.0 \
      -framerate 25 -c:v libx264 -preset fast -pix_fmt yuv420p \
      output.mp4"
@@ -87,7 +87,7 @@ slicer vm exec "$VM_NAME" --uid 1000 -- \
 To capture for a fixed duration:
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "DISPLAY=:99 ffmpeg -f x11grab -video_size 1920x1080 -i :99.0 \
      -framerate 25 -t 60 -c:v libx264 -preset fast -pix_fmt yuv420p \
      output.mp4"
@@ -97,18 +97,18 @@ slicer vm exec "$VM_NAME" --uid 1000 -- \
 
 ```bash
 # Start Xvfb
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "Xvfb :99 -screen 0 1280x720x24 -ac & \
    export DISPLAY=:99; sleep 1"
 
 # Launch xterm with a command
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "DISPLAY=:99 xterm -bg black -fg '#d4d4d4' -fa 'DejaVu Sans Mono' -fs 14 \
      -geometry 100x35 -e bash -c 'echo Recording started; sleep 30' & \
    sleep 2"
 
 # Capture
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "DISPLAY=:99 ffmpeg -f x11grab -video_size 1280x720 -i :99.0 \
      -framerate 25 -t 30 -c:v libx264 -preset fast -pix_fmt yuv420p \
      /tmp/recording.mp4"
@@ -117,7 +117,7 @@ slicer vm exec "$VM_NAME" --uid 1000 -- \
 slicer vm cp "$VM_NAME":/tmp/recording.mp4 ./recording.mp4
 
 # Cleanup
-slicer vm exec "$VM_NAME" --uid 1000 -- "killall xterm Xvfb"
+slicer vm exec "$VM_NAME" -- "killall xterm Xvfb"
 ```
 
 ## Recording an interactive TUI (coding agent) demo — the clean way
@@ -131,7 +131,7 @@ Worked recipe (mirrors `docs/record-demo.sh` in the superterm repo):
    tools that address agents by session (e.g. superterm mail) work:
 
    ```bash
-   slicer vm exec "$VM_NAME" --uid 1000 -- \
+   slicer vm exec "$VM_NAME" -- \
      "tmux new-session -d -s teacher -x 73 -y 41 && \
       tmux new-session -d -s student -x 72 -y 41"
    ```
@@ -143,7 +143,7 @@ Worked recipe (mirrors `docs/record-demo.sh` in the superterm repo):
    even snuck past config-based auto-allow):
 
    ```bash
-   slicer vm exec "$VM_NAME" --uid 1000 -- \
+   slicer vm exec "$VM_NAME" -- \
      "tmux send-keys -t teacher 'opencode --auto' Enter; \
       tmux send-keys -t student 'opencode --auto' Enter"
    ```

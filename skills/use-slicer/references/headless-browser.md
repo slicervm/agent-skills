@@ -27,7 +27,7 @@ Ubuntu runtime libraries. The Mozilla redirect selects the current stable
 release:
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu \
+slicer vm exec "$VM_NAME" --cwd /home/ubuntu \
   --env HOME=/home/ubuntu -- \
   "curl -fsSL \
      'https://download.mozilla.org/?product=firefox-latest&os=linux64-aarch64&lang=en-US' \
@@ -53,7 +53,7 @@ URL=http://127.0.0.1:8080/
 slicer vm exec "$VM_NAME" --uid 0 -- \
   "install -d -o 1000 -g 1000 /tmp/firefox-profile"
 
-slicer vm exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu -- \
+slicer vm exec "$VM_NAME" --cwd /home/ubuntu -- \
   "env -u DISPLAY MOZ_HEADLESS=1 MOZ_WEBRENDER=0 LIBGL_ALWAYS_SOFTWARE=1 \
      /home/ubuntu/firefox/firefox \
        --headless --no-remote --profile /tmp/firefox-profile \
@@ -85,13 +85,13 @@ the standard library (`scripts/firefox-bidi.py`).
 ```bash
 # Node.js client (when node is available):
 slicer vm cp skills/use-slicer/scripts/firefox-bidi.mjs \
-  "$VM_NAME":/tmp/firefox-bidi.mjs --uid 1000
+  "$VM_NAME":/tmp/firefox-bidi.mjs
 
 # Python stdlib client (no Node.js required):
 slicer vm cp skills/use-slicer/scripts/firefox-bidi.py \
-  "$VM_NAME":/tmp/firefox-bidi.py --uid 1000
+  "$VM_NAME":/tmp/firefox-bidi.py
 
-slicer vm bg exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu \
+slicer vm bg exec "$VM_NAME" --cwd /home/ubuntu \
   --shell=/bin/bash -- \
   "mkdir -p /tmp/firefox-profile && \
    env -u DISPLAY MOZ_HEADLESS=1 MOZ_WEBRENDER=0 LIBGL_ALWAYS_SOFTWARE=1 \
@@ -100,15 +100,15 @@ slicer vm bg exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu \
        --remote-debugging-port 9222 about:blank"
 
 # Wait for the debugging port to be ready.
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "ss -tlnp | grep 9222"
 
 # Capture with whichever client is available:
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "node /tmp/firefox-bidi.mjs \
      'https://example.com' /tmp/page.dom.html /tmp/page.png"
 # or:
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "python3 /tmp/firefox-bidi.py \
      'https://example.com' /tmp/page.dom.html /tmp/page.png"
 
@@ -126,7 +126,7 @@ authentication, so leave it bound to loopback and do not port-forward it.
 Install the headless shell as the guest user:
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 --cwd /home/ubuntu \
+slicer vm exec "$VM_NAME" --cwd /home/ubuntu \
   --env HOME=/home/ubuntu -- \
   "npx --yes playwright install chromium-headless-shell"
 ```
@@ -158,7 +158,7 @@ Render both outputs directly:
 ```bash
 URL=http://127.0.0.1:8080/
 
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "BROWSER=\$(find /home/ubuntu/.cache/ms-playwright \
       -type f -path '*/chrome-linux/headless_shell' -print -quit); \
    test -n \"\$BROWSER\"; \

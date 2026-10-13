@@ -17,19 +17,19 @@ slicer vm ready "$VM_NAME"
 
 # 1. Start a tmux server + session inside the VM (tmux daemonises itself,
 #    so plain exec is fine; bg exec works too)
-slicer vm exec "$VM_NAME" --uid 1000 -- 'tmux new-session -d -s agent -x 220 -y 50'
+slicer vm exec "$VM_NAME" -- 'tmux new-session -d -s agent -x 220 -y 50'
 
 # 2. Launch the TUI inside that session
-slicer vm exec "$VM_NAME" --uid 1000 -- "tmux send-keys -t agent 'cd ~/work && opencode' Enter"
+slicer vm exec "$VM_NAME" -- "tmux send-keys -t agent 'cd ~/work && opencode' Enter"
 
 # 3. Wait for the TUI to draw, then send it work
-slicer vm exec "$VM_NAME" --uid 1000 -- 'tmux capture-pane -t agent -p' | grep -q 'Ask anything' \
+slicer vm exec "$VM_NAME" -- 'tmux capture-pane -t agent -p' | grep -q 'Ask anything' \
   || sleep 5
-slicer vm exec "$VM_NAME" --uid 1000 -- "tmux send-keys -t agent 'Fix the failing test in pkg/api' Enter"
+slicer vm exec "$VM_NAME" -- "tmux send-keys -t agent 'Fix the failing test in pkg/api' Enter"
 
 # 4. Loop capture-pane to observe progress — this is your assertion surface
-slicer vm exec "$VM_NAME" --uid 1000 -- 'tmux capture-pane -t agent -p'
-slicer vm exec "$VM_NAME" --uid 1000 -- 'tmux capture-pane -t agent -p -S -200'   # with scrollback
+slicer vm exec "$VM_NAME" -- 'tmux capture-pane -t agent -p'
+slicer vm exec "$VM_NAME" -- 'tmux capture-pane -t agent -p -S -200'   # with scrollback
 ```
 
 Every step is a stateless exec round-trip, so this scales to driving many VMs

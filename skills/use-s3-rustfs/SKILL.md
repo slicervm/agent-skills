@@ -29,9 +29,9 @@ VM_NAME=$(slicer vm add sbox \
 slicer vm ready "$VM_NAME"
 
 # 2. Install prereqs + RustFS (non-interactive)
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "sudo apt-get update -qq && sudo apt-get install -y -qq unzip curl"
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "curl -sSL -o /tmp/install_rustfs.sh https://rustfs.com/install_rustfs.sh && \
    printf '1\n9000\n\n\n\n\n\n\n' | sudo bash /tmp/install_rustfs.sh"
 
@@ -83,7 +83,7 @@ RUSTFS_CONSOLE_ENABLE=true
 Change keys before anything touches real data:
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "sudo sed -i 's/=rustfsadmin/=$(openssl rand -hex 16)/' /etc/default/rustfs && \
    sudo systemctl restart rustfs"
 ```
@@ -91,8 +91,8 @@ slicer vm exec "$VM_NAME" --uid 1000 -- \
 Service management:
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 -- "sudo systemctl status rustfs --no-pager"
-slicer vm exec "$VM_NAME" --uid 1000 -- "sudo journalctl -u rustfs -n 50 --no-pager"
+slicer vm exec "$VM_NAME" -- "sudo systemctl status rustfs --no-pager"
+slicer vm exec "$VM_NAME" -- "sudo journalctl -u rustfs -n 50 --no-pager"
 ```
 
 An unauthenticated GET on `/` returns **HTTP 403** when the server is healthy — that's the AWS-compatible "no anonymous access" response, not a failure.
@@ -165,10 +165,10 @@ Log in with the same access/secret key.
 Prefer running tests in-VM — zero network hops and no port-forward juggling:
 
 ```bash
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "pip3 install --quiet --break-system-packages boto3"
-slicer vm cp ./rustfs_test.py "$VM_NAME":/tmp/rustfs_test.py --uid 1000
-slicer vm exec "$VM_NAME" --uid 1000 -- "python3 /tmp/rustfs_test.py"
+slicer vm cp ./rustfs_test.py "$VM_NAME":/tmp/rustfs_test.py
+slicer vm exec "$VM_NAME" -- "python3 /tmp/rustfs_test.py"
 ```
 
 ---
@@ -190,11 +190,11 @@ slicer vm exec "$VM_NAME" --uid 1000 -- "python3 /tmp/rustfs_test.py"
 
 ```bash
 # Wipe just the data, keep the VM
-slicer vm exec "$VM_NAME" --uid 1000 -- \
+slicer vm exec "$VM_NAME" -- \
   "sudo systemctl stop rustfs && sudo rm -rf /data/rustfs0/* && sudo systemctl start rustfs"
 
 # Uninstall RustFS, keep the VM
-slicer vm exec "$VM_NAME" --uid 1000 -- "printf '2\n' | sudo bash /tmp/install_rustfs.sh"
+slicer vm exec "$VM_NAME" -- "printf '2\n' | sudo bash /tmp/install_rustfs.sh"
 
 # Nuke the whole VM
 slicer vm delete "$VM_NAME"

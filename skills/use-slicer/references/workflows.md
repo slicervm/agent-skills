@@ -8,8 +8,8 @@ Worked recipes that combine the core `slicer vm` commands. Copy-paste starting p
 WORKFLOW=e2e-$(date +%Y%m%d-%H%M%S)
 VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
-slicer cp -r ./project/ "$VM_NAME":/home/ubuntu/project/ --uid 1000
-slicer vm exec "$VM_NAME" --uid 1000 --cwd ~/project -- "npm install && npm test"
+slicer cp -r ./project/ "$VM_NAME":/home/ubuntu/project/
+slicer vm exec "$VM_NAME" --cwd ~/project -- "npm install && npm test"
 slicer cp -r "$VM_NAME":/home/ubuntu/project/test-results/ ./results/
 slicer vm delete "$VM_NAME"
 ```
@@ -32,8 +32,8 @@ docker run -d -p 8080:8080 myapp
 WORKFLOW=build-$(date +%Y%m%d-%H%M%S)
 VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {print $2; exit}')
 slicer vm ready "$VM_NAME"
-slicer cp -r ./myproject/ "$VM_NAME":/home/ubuntu/myproject/ --uid 1000
-slicer vm exec "$VM_NAME" --uid 1000 --cwd ~/myproject -- "make build"
+slicer cp -r ./myproject/ "$VM_NAME":/home/ubuntu/myproject/
+slicer vm exec "$VM_NAME" --cwd ~/myproject -- "make build"
 slicer vm cp "$VM_NAME":/home/ubuntu/myproject/bin/app ./bin/app-linux
 slicer vm delete "$VM_NAME"
 ```
@@ -46,11 +46,11 @@ VM_NAME=$(slicer vm add sbox --tag "workflow=$WORKFLOW" | awk '/Hostname:/ {prin
 slicer vm ready "$VM_NAME"
 # Install Kubernetes CLIs with arkade (already available on slicer images).
 # Default install path is ~/.arkade/bin.
-slicer vm exec "$VM_NAME" --uid 1000 -- "arkade get k3sup kubectl helm"
+slicer vm exec "$VM_NAME" -- "arkade get k3sup kubectl helm"
 # Prefer k3sup for single-node installs (matches the use-k3sup skill's golden
 # rule); fall back to the raw installer only when k3sup is unavailable:
-slicer vm exec "$VM_NAME" --uid 1000 -- "~/.arkade/bin/k3sup install --local --context default"
-# Alternative: slicer vm exec "$VM_NAME" --uid 1000 -- "curl -sfL https://get.k3s.io | sh -"
+slicer vm exec "$VM_NAME" -- "~/.arkade/bin/k3sup install --local --context default"
+# Alternative: slicer vm exec "$VM_NAME" -- "curl -sfL https://get.k3s.io | sh -"
 slicer vm ready "$VM_NAME" --userdata --timeout 2m
 slicer vm forward "$VM_NAME" -L 6443:127.0.0.1:6443 &
 slicer vm cp "$VM_NAME":/etc/rancher/k3s/k3s.yaml ./k3s.yaml
@@ -79,7 +79,7 @@ For more on `k3sup` provisioning, see the `use-k3sup` skill.
 ## Database testing
 
 ```bash
-slicer vm exec VM_NAME --uid 1000 -- "sudo apt update && sudo apt install -y postgresql"
+slicer vm exec VM_NAME -- "sudo apt update && sudo apt install -y postgresql"
 slicer vm forward VM_NAME -L 5432:127.0.0.1:5432 &
 psql -h 127.0.0.1 -U postgres
 ```
