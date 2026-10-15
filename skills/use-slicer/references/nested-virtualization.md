@@ -46,6 +46,35 @@ See the official [nested virtualization guide](https://docs.slicervm.com/tasks/n
 - Have a Slicer license file available to copy into the test VM. Install the
   Linux binary matching the guest architecture; a macOS binary cannot run there.
 
+### Enable nested virtualization on Slicer for Mac
+
+Requires macOS 15+ and an M3 or later Mac; see
+[Apple's compatibility documentation](https://developer.apple.com/documentation/virtualization/vzgenericplatformconfiguration/isnestedvirtualizationsupported).
+Nested virtualization defaults to off per host group, and Slicer rejects
+unsupported hosts at VM launch.
+
+Before creating the outer VM, add `nested_virt: true` to the existing `sbox`
+entry in `slicer-mac.yaml`. Preserve the rest of the configuration; this fragment
+shows only the setting to add:
+
+```yaml
+config:
+  host_groups:
+    - name: sbox
+      # Keep the group's existing settings here.
+      nested_virt: true
+```
+
+Restart the daemon, then launch a fresh outer VM; running VMs do not acquire
+this setting. Use `slicer-mac service restart daemon` for a launchd-managed
+installation, or restart the foreground daemon with its existing config.
+Restarting can interrupt other VMs, so arrange it separately if the test must
+leave them untouched.
+
+Verify `/dev/kvm` inside the new guest before installing the inner daemon.
+If absent, check the loaded host-group setting, VM creation time, and guest
+kernel KVM support before continuing.
+
 ## 1. Select or create the outer test VM
 
 Run these commands on the workstation using its existing outer-daemon connection.

@@ -65,6 +65,11 @@ The assigned name cannot be changed or removed.
 
 Do not target or reuse `slicer-1` for mutable tasks unless the user explicitly asks. Reuse the session's tagged VM when known; otherwise create a new VM with an explicit `--tag`.
 
+To run Slicer inside a Mac-hosted Linux VM, read the
+[nested virtualization setup](nested-virtualization.md#enable-nested-virtualization-on-slicer-for-mac)
+before launching it. It covers hardware requirements, `nested_virt`, daemon
+restart, and guest KVM checks.
+
 ## Cold forking `sbox` VMs
 
 Prepare and stop a persistent `sbox` VM, commit it, then fork independent APFS
