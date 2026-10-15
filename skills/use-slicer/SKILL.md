@@ -11,6 +11,8 @@ Virtualization on macOS. Use it when you need:
 
 - A real Linux environment with systemd, Internet access, and SSH preinstalled (especially from macOS)
 - Sandboxed builds, CI, or E2E tests
+- Running Slicer for Linux inside a Linux VM on macOS or Windows, or on a cloud VM with nested virtualization
+- Testing Slicer itself by running Slicer within a Slicer VM with nested virtualization (Linux and Slicer for Mac)
 - Docker/container workflows with port forwarding
 - Isolated environments for untrusted or destructive operations
 - Kubernetes (k3s) clusters for testing
@@ -81,6 +83,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/workspaces.md](references/workspaces.md) — project `slicer.yaml`, setup/init, services, push/watch/pull, and forwarding
 - [references/macos.md](references/macos.md) — Slicer for Mac (slicer-mac)
 - [references/daemon-setup.md](references/daemon-setup.md) — generate a config and run your own daemon
+- [references/nested-virtualization.md](references/nested-virtualization.md) — Linux VMs on macOS/Windows, cloud VMs with KVM, and Slicer within Slicer for testing and experimentation
 - [references/workflows.md](references/workflows.md) — worked recipes (E2E, Docker, builds, k3s, DB, SSH)
 - [references/custom-images.md](references/custom-images.md) — select a published Ubuntu, Rocky Linux, or Arch base image; custom rootfs images; and userdata
 - [references/bg-exec.md](references/bg-exec.md) — background exec detail
