@@ -10,7 +10,7 @@ The Slicer CLI also works as a client for **Slicer for Mac**, which runs Linux m
   - `sbox` — on-demand host group for sandbox VMs
 - **Socket**: auto-detected at `~/slicer-mac/slicer.sock` — no `--url` needed.
 - **Auth**: disabled by default for the local socket — no `--token` needed.
-- **Networking**: VMNet — VMs cannot talk to each other, but the host can talk to VMs. Reach a VM's TCP ports by the IP shown in `slicer vm list`, or with `slicer vm forward` (SSH `-L` / `kubectl port-forward` style, for TCP and UNIX sockets).
+- **Networking**: Apple VZ NAT by default — VMs cannot talk to each other, but the host can talk to VMs. Reach a networked VM's TCP ports by the IP shown in `slicer vm list`, or with `slicer vm forward` (for TCP and UNIX sockets). Supported builds accept `--network none` for `sbox` VMs with no NIC or IP lease; management remains available over vsock.
 - **Install**: `slicer install slicer-mac ~/slicer-mac`
 - **Cold forking**: supported for stopped, persistent `sbox` VMs through the
   same `slicer vm commit` and `slicer vm fork` commands used on Linux.
@@ -67,30 +67,28 @@ Do not target or reuse `slicer-1` for mutable tasks unless the user explicitly a
 
 ## Cold forking `sbox` VMs
 
-Prepare and stop a persistent `sbox` VM, commit it, then fork independent APFS
-copy-on-write children. This minimal example assumes ordinary `sbox` egress;
-when the host group is forced through Slicer Proxy, use the ordered hot/cold
-client recipe in [cold-forking.md](cold-forking.md) instead:
+For an online builder and a completely offline runner, read
+[offline-vms.md](offline-vms.md): prepare with host-group networking, stop
+and commit, then fork with `--network none`. Request `none` for every offline
+fork. Omission or an empty value uses VZ NAT, even from an offline source.
 
-```bash
-BUILDER=$(slicer vm add sbox --persistent --wait --json |
-  jq -r '.hostname')
-slicer vm exec "$BUILDER" -- "sudo arkade system install go"
-slicer vm shutdown "$BUILDER"
-COMMIT=$(slicer vm commit "$BUILDER" --cache-key go-builder-v1 --json |
-  jq -r '.commit_id')
-RUNNER=$(slicer vm fork "$COMMIT" --wait --json | jq -r '.hostname')
-```
+Prepare and stop a persistent `sbox` VM, commit it, then fork independent APFS
+copy-on-write children. Follow the
+[cold-fork guidance](cold-forking.md#agent-safe-workflow), or the
+[proxy recipe](cold-forking.md#macos-with-slicer-proxy) when the host group is
+forced through Slicer Proxy.
 
 The shared CLI and SDK contract includes cache keys, tags, identity fixups,
 secret filtering, persistent or ephemeral children, waits, and CPU/RAM
 overrides. The macOS backend is disk-only and supports `sbox` only.
 
-Network allow/drop settings apply to every `sbox` VM, so macOS does not accept
-the Linux per-fork `--allow`, `--no-allow`, and `--drop` overrides. Force the
-host group through Slicer Proxy, use an open client while preparing a hot
-builder, and give each cold-forked runner a different default-deny or
-restricted client. Never commit the hot client token into the builder disk.
+Network allow/drop settings apply to networked `sbox` VMs as a group, so macOS
+does not accept the Linux per-fork `--allow`, `--no-allow`, and `--drop`
+overrides. When runners need selective network access, force the host group
+through Slicer Proxy, use an open client while preparing a hot builder, and
+give each cold-forked runner a different default-deny or restricted client.
+Offline (`none`) VMs cannot reach Slicer Proxy. Never commit the hot client
+token into the builder disk.
 See [cold-forking.md](cold-forking.md) for cleanup, cache, and proxy-client
 guidance.
 

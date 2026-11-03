@@ -1,6 +1,6 @@
 ---
 name: use-slicer
-description: Use Slicer to launch, name, tag, prepare, and cold-fork Linux microVMs for declarative project workspaces with slicer workspace, sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, and isolated development — works from macOS and Linux hosts
+description: Launches, names, tags, prepares, and cold-forks Linux microVMs on macOS and Linux hosts. Use for declarative project workspaces with slicer workspace, sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, isolated development, and offline VMs.
 allowed-tools: Bash
 ---
 
@@ -19,7 +19,10 @@ Virtualization on macOS. Use it when you need:
 - Preparing one builder VM, then cold-forking clean runners without repeating setup
 - Running coding agents in isolated microVMs (Amp, Claude Code, Codex, OpenCode, GitHub Copilot CLI) then copying out the outcome - code, files, reports, binaries, images, etc.
 
-VMs boot in 1–3 seconds, have full systemd, internet access, and SSH pre-installed.
+VMs boot in 1–3 seconds and have full systemd and SSH pre-installed. Networking
+is enabled by default; supported macOS `sbox` and Linux Firecracker VMs can
+run without a NIC while retaining vsock management. Read
+[references/offline-vms.md](references/offline-vms.md) for support checks and the online preparation → offline fork workflow.
 
 Docs: https://docs.slicervm.com
 Go SDK: https://github.com/slicervm/sdk (`github.com/slicervm/sdk`)
@@ -87,7 +90,8 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/file-transfer.md](references/file-transfer.md) — binary and recursive copies, exclusions, destinations, and legacy-agent compatibility
 - [references/arkade.md](references/arkade.md) — installing CLI tools with `arkade get` (one call, parallel downloads, `tool@version` pinning)
 - [references/interactive-tui.md](references/interactive-tui.md) — driving interactive TUIs and coding agents (guest tmux via exec, or host tmux + vm shell)
-- [references/networking.md](references/networking.md) — bridge, isolated, and macvtap (LAN-direct) networking
+- [references/networking.md](references/networking.md) — Linux bridge, isolated, and macvtap networking; per-VM offline selection on Linux and macOS
+- [references/offline-vms.md](references/offline-vms.md) — macOS and Linux no-NIC VMs, online preparation, and offline cold forks
 - [references/headless-browser.md](references/headless-browser.md) — render post-JavaScript DOM and screenshots with a lean, real browser inside a VM
 - [references/headless-x11.md](references/headless-x11.md) — run X11 applications headlessly with Xvfb and capture terminal video with ffmpeg (Slicer for Mac and Slicer for Linux)
 - [references/vm-names-and-tags.md](references/vm-names-and-tags.md) — friendly CLI names, canonical hostnames, mutable tags, and raw API lookup
@@ -283,6 +287,7 @@ The hostname is printed on creation (e.g. `demo-3`). Key flags:
 | `--tag env=ci` | Metadata tags |
 | `--secrets secret1,secret2` | Allow access to named secrets |
 | `--persistent` | Keep VM state across daemon restarts/shutdowns (default `true`); pass `--persistent=false` for ephemeral |
+| `--network none` | No NIC on Linux Firecracker or macOS `sbox`. Omitted or empty uses host-group networking. See [offline-vms.md](references/offline-vms.md) |
 
 For automation, use `--wait --json` to return only after the guest agent is
 ready. When using `--name`, keep the chosen name as `VM_REF` for later CLI
@@ -592,22 +597,22 @@ slicer vm restore VM_REF     # Restore from snapshot
 
 ### Cold fork a prepared VM
 
-Prepare a persistent builder once, shut it down, commit its disk, then fork
-allocator-named runners. On macOS, use the `sbox` host group:
-
-```bash
-slicer vm shutdown "$BUILDER"
-COMMIT=$(slicer vm commit "$BUILDER" --cache-key "$CACHE_KEY" --json | jq -r '.commit_id')
-RUNNER=$(slicer vm fork "$COMMIT" --tag "workflow=$WORKFLOW" --json | jq -r '.hostname')
-```
+Prepare a persistent builder once, shut it down, and wait until it is stopped
+before committing its disk. Fork new VMs from that commit. On macOS, use the
+`sbox` host group. Follow the
+[cold-fork guidance](references/cold-forking.md#agent-safe-workflow)
+for shutdown, commit, and fork steps.
 
 Do not pass a child hostname to `vm fork`; Slicer allocates it. The same CLI
 and SDK workflow works with Slicer for Mac. macOS forks are disk-only APFS
-clones of `sbox` VMs. Network allow/drop settings apply to the whole macOS
-`sbox` host group, so give hot builders and restricted runners different
-Slicer Proxy clients; do not rely on per-fork network overrides. On Linux,
-`--allow`, `--no-allow`, and `--drop` require an isolated host group;
-bridge-mode forks inherit their host group's networking.
+clones of `sbox` VMs. On supported macOS and Linux Firecracker builds, disk
+forks require `--network none` for every offline runner, even from an offline
+source. Omitted or empty uses host-group networking.
+See [references/offline-vms.md](references/offline-vms.md). macOS allow/drop
+settings apply to the whole `sbox` host group; use separate Slicer Proxy
+clients when networked runners need different egress policies. On Linux,
+`--allow`, `--no-allow`, and `--drop` require a networked VM in an isolated
+host group; online bridge-mode forks inherit their host group's networking.
 
 For cache hits, no-egress runners, cleanup, and agent-safety notes, read
 [references/cold-forking.md](references/cold-forking.md).
@@ -720,7 +725,7 @@ slicer activate         # Legacy command for GitHub Sponsors and for trial users
 1. **Default user**: auto-detected as the image's non-root user (`ubuntu` on Ubuntu images, `slicer` on Rocky Linux and Arch). Don't pass `--uid` unless you need another user, i.e. `--uid 0` for root.
 2. **First boot pulls image**: may take 30–60s on first run; subsequent boots are 1–3s.
 3. **Port forwards block**: run them in background with `&`.
-4. **Internet access**: VMs have outbound internet by default (bridge mode).
+4. **Internet access**: enabled by default, subject to network policy. On supported macOS and Linux Firecracker builds, `--network none` attaches no NIC and cannot reach the internet or Slicer Proxy.
 5. **Storage modes**: `image` (persistent, default), `devmapper`, `zfs`.
 6. **Userdata runs once**: guarded by `/etc/slicer/userdata-ran` in the guest. Delete `.img` + `.lock` files to reset.
 7. **.slicerignore**: place at workspace root to skip files during `slicer workspace/amp/claude/codex` copies.
