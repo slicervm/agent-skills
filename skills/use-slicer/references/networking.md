@@ -2,7 +2,9 @@
 
 ## Network Modes
 
-Slicer supports three networking modes, set at config generation time via `slicer new --net`:
+On Linux, `slicer new --net` configures bridge, isolated, or macvtap
+networking for a host group. On Linux Firecracker and macOS, use
+`--network none` on individual VMs for no NIC.
 
 ### Bridge Mode (default)
 
@@ -30,23 +32,40 @@ slicer new demo --net isolated --allow "0.0.0.0/0" --drop "10.0.0.0/8"
 - Default isolated range: `169.254.100.0/22`
 - Best for: untrusted code execution, CI runners, sandboxes
 
-Cold forks may override `--allow`, `--no-allow`, and `--drop` only when their
-host group uses isolated networking. Cold forking also works in bridge mode,
-but the runner inherits the host-group network policy unchanged. Do not try to
-apply these flags to a bridge-mode fork.
+Networked cold forks may override `--allow`, `--no-allow`, and `--drop` only
+in isolated host groups. Online bridge-mode forks inherit the host-group
+network policy unchanged; do not apply these flags to a bridge-mode fork.
+
+### Linux offline VMs (Firecracker)
+
+On supported builds, `vm add` and disk `vm fork` accept `--network none` for
+no NIC or IP lease. Omission or an empty value uses the host-group network
+for both creation and forks. Request `none` explicitly for every offline
+fork, including forks of offline VMs. Offline host groups are unsupported.
+
+Disk commits and forks require bridge or isolated groups. CNI/macvtap can
+launch offline VMs but cannot commit or fork. Cloud Hypervisor, QEMU, and hot
+(memory) forks do not support `none`. See [offline-vms.md](offline-vms.md)
+for support checks and the online preparation → offline fork workflow.
 
 ### macOS (slicer-mac)
 
-- VMs **cannot** talk to each other
-- VMs **can** talk to the macOS host
+- Host-group networking uses VZ NAT: VMs **cannot** talk to each other but **can** talk to the macOS host
+- `none` attaches no NIC and allocates no IP lease; guest network access to
+  the host, internet, and Slicer Proxy is unavailable, while vsock management works
+- On supported builds, select `--network none` on `vm add` or `vm fork`.
+  Omission or an empty value uses VZ NAT for both; every offline fork must
+  explicitly request `none`. Read [offline-vms.md](offline-vms.md) for support
+  checks and the online preparation → offline fork recipe.
 - The `slicer` host group is a persistent Linux twin (survives reboots)
 - The `sbox` host group is for on-demand sandbox VMs
 - Socket auto-detected at `~/slicer-mac/slicer.sock` — no `--url` needed
 - Cold commit and fork are supported for `sbox` VMs, but Apple VZ networking
   does not support the Linux per-fork `--allow`, `--no-allow`, or `--drop`
   overrides
-- The slicer-mac allow/drop configuration applies to every `sbox` VM. For a
-  hot builder and a restricted cold fork, force `sbox` through Slicer Proxy
+- The slicer-mac allow/drop configuration applies to networked `sbox` VMs
+  as a group. For a hot builder and a cold fork needing selective network
+  access, force `sbox` through Slicer Proxy
   and assign different proxy clients: broad rules for the builder and no or
   narrowly scoped rules for the runner
 
