@@ -28,6 +28,7 @@ Key flags for `slicer new`:
 | `--import-user USERNAME` | Import SSH keys from GitHub |
 | `--userdata-file ./setup.sh` | Userdata script |
 | `--graceful-shutdown=false` | Fast teardown |
+| `--shutdown-timeout 90s` | Writes `config.shutdown_timeout` (default `1m` when omitted). Used for graceful daemon shutdown and deletion, and after guest acknowledgement for individual Firecracker shutdowns. |
 | `--min` | Minimal image (faster boot, no Docker/K8s) |
 
 ## Exposing the API: TCP vs Unix socket
@@ -125,7 +126,7 @@ Then generate, install, enable, and start the systemd unit:
 sudo slicer service generate --install \
   --name slicer-k3s \
   --working-directory /root/k3s \
-  --timeout-stop-sec 180
+  --timeout-stop-sec 240
 ```
 
 ```bash
@@ -136,7 +137,18 @@ sudo journalctl -u slicer-k3s -f --output=cat      # follow logs
 
 **License — point the unit at the real file, don't copy it.** `slicer service generate --install` writes an explicit `--license-file` into `ExecStart`. When run through `sudo`, it resolves the invoking user's `~/.slicer/LICENSE`; with `--user`, it resolves that user's license instead. Pass `--license-file` when you need a specific path.
 
-**Stop timeout.** With `graceful_shutdown` on, Slicer waits up to ~120s for VMs to power off cleanly when the daemon is told to stop. `--timeout-stop-sec 180` gives it that room.
+**Size the systemd stop deadline for all running VMs.** For an existing daemon,
+read the YAML used by the process serving the configured Slicer endpoint.
+Use its `config.shutdown_timeout`, or the one-minute default if the key is
+absent. If the config is unavailable, state the assumed grace period.
+With `graceful_shutdown` enabled, the daemon stops VMs sequentially. For each
+amd64 Firecracker VM, the daemon requests shutdown and waits within one `shutdown_timeout` budget.
+If that request fails or the grace period expires, allow up to 5s for the
+force-stop fallback. The separate 10s guest acknowledgement window applies
+only to individual `slicer vm shutdown` requests. Add time for daemon cleanup.
+With three VMs at the one-minute default, the 240s example allows `3 × (60s + 5s)` plus 45s of margin. If the daemon
+suspends VMs on shutdown, also allow time for snapshots and fallback shutdown.
+On arm64 Firecracker, daemon shutdown and deletion stop the VMM directly.
 
 ### Troubleshooting the service
 

@@ -68,11 +68,6 @@ forced through Slicer Proxy, follow the hot-client setup in
 [cold-forking.md](cold-forking.md#macos-with-slicer-proxy) during preparation
 and remove its token before committing.
 
-Shutdown is asynchronous. The example polls the builder's state up to 30
-times, two seconds apart, before committing. A failed lookup or a VM that
-does not reach `Stopped` ends the workflow rather than racing commit against
-shutdown. Use the same check before relaunching a VM you have just shut down.
-
 ```bash
 set -e -o pipefail
 # Linux: replace sbox with an existing Firecracker bridge or isolated group.
@@ -86,18 +81,12 @@ BUILDER_HOSTNAME=$(slicer vm add "$GROUP" --name "$BUILDER_REF" \
   --wait --json | jq -er '.hostname')
 slicer vm exec "$BUILDER_REF" --uid 0 -- \
   "apt-get update && apt-get install -y jq"
+```
 
-slicer vm shutdown "$BUILDER_REF"
-for attempt in $(seq 1 30); do
-  VM_JSON=$(slicer vm describe "$BUILDER_REF" --json) || exit 1
-  VM_STATE=$(printf '%s\n' "$VM_JSON" | jq -er '.status') || exit 1
-  [ "$VM_STATE" = Stopped ] && break
-  sleep 2
-done
-if [ "$VM_STATE" != Stopped ]; then
-  echo "VM did not stop; leaving it intact without committing" >&2
-  exit 1
-fi
+Run the [shutdown and status check](shutdown.md) with `VM_REF="$BUILDER_REF"`.
+Once it succeeds, commit the disk and fork the offline VM:
+
+```bash
 COMMIT=$(slicer vm commit "$BUILDER_REF" --json | jq -er '.commit_id')
 # The committed disk remains usable after source deletion.
 slicer vm delete "$BUILDER_REF"
