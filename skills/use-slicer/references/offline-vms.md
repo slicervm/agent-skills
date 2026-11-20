@@ -1,7 +1,7 @@
 # Offline VMs on macOS and Linux
 
 Prepare dependencies with networking, commit the stopped VM's disk, then fork
-offline runners with no virtual NIC. Supported builds provide this for macOS
+offline VMs with no virtual NIC. Supported builds provide this for macOS
 `sbox` VMs and Linux Firecracker VMs. On macOS, the built-in `slicer-1` keeps
 VZ NAT. Linux Cloud Hypervisor, QEMU, and hot (memory) forks
 do not support `none`; use a disk commit for offline forks.
@@ -63,7 +63,7 @@ macOS, use `GROUP=sbox`. On Linux, set `GROUP` to an existing Firecracker
 bridge or isolated host group. Use the session's configured endpoint or
 local socket auto-detection.
 
-The builder needs outbound access for package installation; if macOS `sbox` is
+The source VM needs outbound access for package installation; if macOS `sbox` is
 forced through Slicer Proxy, follow the hot-client setup in
 [cold-forking.md](cold-forking.md#macos-with-slicer-proxy) during preparation
 and remove its token before committing.
@@ -73,38 +73,38 @@ set -e -o pipefail
 # Linux: replace sbox with an existing Firecracker bridge or isolated group.
 GROUP=sbox
 WORKFLOW=offline-jq-$(date +%Y%m%d-%H%M%S)
-BUILDER_REF="$WORKFLOW-builder"
-RUNNER_REF="$WORKFLOW-runner"
+SOURCE_VM="$WORKFLOW-source"
+FORKED_VM="$WORKFLOW-fork"
 
-BUILDER_HOSTNAME=$(slicer vm add "$GROUP" --name "$BUILDER_REF" \
+SOURCE_HOSTNAME=$(slicer vm add "$GROUP" --name "$SOURCE_VM" \
   --tag "workflow=$WORKFLOW" --persistent \
   --wait --json | jq -er '.hostname')
-slicer vm exec "$BUILDER_REF" --uid 0 -- \
+slicer vm exec "$SOURCE_VM" --uid 0 -- \
   "apt-get update && apt-get install -y jq"
 ```
 
-Run the [shutdown and status check](shutdown.md) with `VM_REF="$BUILDER_REF"`.
+Run the [shutdown and status check](shutdown.md) with `VM_REF="$SOURCE_VM"`.
 Once it succeeds, commit the disk and fork the offline VM:
 
 ```bash
-COMMIT=$(slicer vm commit "$BUILDER_REF" --json | jq -er '.commit_id')
+COMMIT=$(slicer vm commit "$SOURCE_VM" --json | jq -er '.commit_id')
 # The committed disk remains usable after source deletion.
-slicer vm delete "$BUILDER_REF"
+slicer vm delete "$SOURCE_VM"
 
-RUNNER_HOSTNAME=$(slicer vm fork "$COMMIT" --name "$RUNNER_REF" \
+FORKED_HOSTNAME=$(slicer vm fork "$COMMIT" --name "$FORKED_VM" \
   --tag "workflow=$WORKFLOW" --network none --wait --json | jq -er '.hostname')
-slicer vm describe "$RUNNER_REF" --json |
+slicer vm describe "$FORKED_VM" --json |
   jq -e '.network.mode == "none" and (.ip == null or .ip == "")' >/dev/null
-slicer vm exec "$RUNNER_REF" -- jq --version
-slicer vm exec "$RUNNER_REF" -- ls /sys/class/net
+slicer vm exec "$FORKED_VM" -- jq --version
+slicer vm exec "$FORKED_VM" -- ls /sys/class/net
 
 # Native file copy also works without an IP address.
-slicer vm exec "$RUNNER_REF" -- "jq --version > /tmp/jq-version.txt"
-slicer vm cp "$RUNNER_REF":/tmp/jq-version.txt "./$WORKFLOW-jq-version.txt"
+slicer vm exec "$FORKED_VM" -- "jq --version > /tmp/jq-version.txt"
+slicer vm cp "$FORKED_VM":/tmp/jq-version.txt "./$WORKFLOW-jq-version.txt"
 ```
 
 If the network check fails, the example stops before running the workload,
-leaving the runner available for inspection.
+leaving the forked VM available for inspection.
 
 An offline guest has no hardware NIC; software interfaces such as `lo` and
 `dummy0` can still appear. No IP lease is allocated. Use agent readiness and
@@ -114,11 +114,11 @@ The source hostname and child hostname are separate API identities; keep the
 chosen friendly references for CLI operations. Deleted source hostnames can
 be reused, so do not rediscover or delete the source by its old hostname later.
 
-After collecting the result, delete the runner. Keep the commit for reuse,
+After collecting the result, delete the forked VM. Keep the commit for reuse,
 or delete it after all children and the source have been deleted:
 
 ```bash
-slicer vm delete "$RUNNER_REF"
+slicer vm delete "$FORKED_VM"
 slicer vm commit delete "$COMMIT" # Only when the cached disk is no longer needed.
 ```
 
@@ -143,7 +143,7 @@ online cold fork.
 
 The guest cannot reach the internet, the host's network services, or Slicer
 Proxy. Install packages and download dependencies, container images, and
-other required inputs while preparing the online builder, or copy files via
+other required inputs while preparing the online source VM, or copy files via
 `slicer vm cp`. Userdata and workloads must work offline; a script that runs
 `apt-get`, downloads a toolchain, or calls a remote model API cannot rely on
 network access. Do not configure a proxy client as an offline connectivity fix.

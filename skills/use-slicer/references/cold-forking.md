@@ -33,17 +33,11 @@ Read [offline-vms.md](offline-vms.md) for support checks and the online
 preparation → offline fork recipe.
 macOS rejects per-fork allow/drop overrides; its allow/drop configuration
 applies to networked `sbox` VMs as a group. Use separate Slicer Proxy clients
-when a runner needs selective network access. Offline VMs cannot reach the proxy.
+when a forked VM needs selective network access. Offline VMs cannot reach the proxy.
 
-## Example roles and cache key
-
-- **Builder**: the source VM prepared for reuse in the example below.
-- **Runner**: a VM forked from that commit to run a job.
-- **Cache key**: a caller-owned key which maps reusable setup inputs to a commit.
-
-Never choose a runner hostname. `slicer vm fork` accepts one positional value,
-the commit ID, and returns the allocated hostname. Use tags for job, tenant, or
-workflow identity.
+Slicer allocates the forked VM's hostname. Pass the commit ID to
+`slicer vm fork` and read the hostname from its response. Use tags for job,
+tenant, or workflow identity.
 
 ## Agent-safe workflow
 
@@ -51,7 +45,7 @@ Work through these stages separately, including the shutdown wait before
 committing.
 
 Use JSON for every value consumed by automation. Pick a host group which
-supports cold forks (`sbox` on macOS), then look for a cached builder before
+supports cold forks (`sbox` on macOS), then look for a cached disk commit before
 doing any setup:
 
 ```bash
@@ -66,23 +60,23 @@ COMMIT=$(slicer vm commit list \
   --json | jq -r '.[0].commit_id // empty')
 ```
 
-On a cache miss, launch and prepare a persistent builder. Give every VM a
+On a cache miss, launch and prepare a persistent source VM. Give every VM a
 descriptive tag:
 
 ```bash
 set -e -o pipefail
 if [ -z "$COMMIT" ]; then
-  BUILDER=$(slicer vm add "$GROUP" \
+  SOURCE_VM=$(slicer vm add "$GROUP" \
     --persistent \
     --tag "workflow=$WORKFLOW" \
-    --tag role=builder \
+    --tag role=source \
     --wait \
     --json | jq -r '.hostname')
 
-  slicer vm exec "$BUILDER" -- \
+  slicer vm exec "$SOURCE_VM" -- \
     "sudo arkade system install go"
 
-  slicer vm exec "$BUILDER" -- \
+  slicer vm exec "$SOURCE_VM" -- \
     "git clone https://github.com/alexellis/arkade /home/ubuntu/arkade && \
      cd /home/ubuntu/arkade && \
      /usr/local/go/bin/go build -mod=vendor -o ./arkade"
@@ -91,16 +85,16 @@ fi
 
 On Firecracker, read `config.shutdown_timeout` from the active daemon's YAML
 before stopping the VM for a commit. If the config is unavailable, state the
-wait you assume. For a new builder, follow the
+wait you assume. For a new source VM, follow the
 [shutdown and status check](shutdown.md)
-with `VM_REF="$BUILDER"` to issue shutdown and wait for `Stopped`.
+with `VM_REF="$SOURCE_VM"` to issue shutdown and wait for `Stopped`.
 Run the commit block below only after that check succeeds:
 
 ```bash
 set -e -o pipefail
 if [ -z "$COMMIT" ]; then
-  slicer vm describe "$BUILDER" --json | jq -e '.status == "Stopped"' >/dev/null
-  COMMIT=$(slicer vm commit "$BUILDER" \
+  slicer vm describe "$SOURCE_VM" --json | jq -e '.status == "Stopped"' >/dev/null
+  COMMIT=$(slicer vm commit "$SOURCE_VM" \
     --cache-key "$CACHE_KEY" \
     --tag "workflow=$WORKFLOW" \
     --json | jq -er '.commit_id')
@@ -114,12 +108,12 @@ lock-file version in the key, and change it when those inputs change.
 On a cache hit, skip preparation and commit; fork immediately:
 
 ```bash
-RUNNER=$(slicer vm fork "$COMMIT" \
+FORKED_VM=$(slicer vm fork "$COMMIT" \
   --tag "workflow=$WORKFLOW" \
-  --tag role=runner \
+  --tag role=fork \
   --json | jq -r '.hostname')
 
-slicer vm exec "$RUNNER" -- "hostname && cat /etc/machine-id"
+slicer vm exec "$FORKED_VM" -- "hostname && cat /etc/machine-id"
 ```
 
 Each child receives its own allocated hostname, guest hostname, and machine
@@ -131,8 +125,8 @@ not use SSH host-key presence as a generic identity check.
 
 On supported macOS and Linux Firecracker builds, use
 `slicer vm fork "$COMMIT" --network none` for a disk fork without a NIC.
-The commit can come from an online builder; see the complete [offline workflow](offline-vms.md#prepare-online-then-fork-offline).
-Use the proxy workflow below when a runner needs selective egress.
+The commit can come from an online source VM; see the complete [offline workflow](offline-vms.md#prepare-online-then-fork-offline).
+Use the proxy workflow below when a forked VM needs selective egress.
 
 ### Linux isolated networking
 
@@ -140,9 +134,9 @@ On Linux, use these firewall flags for a networked VM in an isolated group;
 do not combine them with `--network none`:
 
 ```bash
-RUNNER=$(slicer vm fork "$COMMIT" \
+FORKED_VM=$(slicer vm fork "$COMMIT" \
   --tag "workflow=$WORKFLOW" \
-  --tag role=closed-runner \
+  --tag role=restricted-fork \
   --no-allow \
   --drop 0.0.0.0/0 \
   --json | jq -r '.hostname')
@@ -155,21 +149,21 @@ LAN. For path, method, credential, and TTL controls, use the companion
 
 ### macOS with Slicer Proxy
 
-For networked macOS runners needing policy-controlled egress, first configure
+For networked macOS VMs needing policy-controlled egress, first configure
 the whole `sbox` host group so Slicer Proxy is its only egress path. Omit
-`--network` for both builder and runner to use host-group networking. Use
-this order instead of the generic builder preparation above:
+`--network` for both VMs to use host-group networking. Use
+this order instead of the source VM preparation above:
 
 ```bash
 set -e -o pipefail
-BUILDER=$(slicer vm add sbox \
+SOURCE_VM=$(slicer vm add sbox \
   --persistent \
   --tag "workflow=$WORKFLOW" \
-  --tag role=builder \
+  --tag role=source \
   --wait \
   --json | jq -r '.hostname')
 
-HOT_CLIENT="builder-$BUILDER"
+HOT_CLIENT="source-$SOURCE_VM"
 HOT_TOKEN=$(slicer proxy client create "$HOT_CLIENT")
 slicer proxy allow "$HOT_CLIENT" --host '*'
 
@@ -177,36 +171,36 @@ slicer vm exec \
   --uid 0 \
   --env HTTP_PROXY="http://:$HOT_TOKEN@192.168.64.1:3128" \
   --env HTTPS_PROXY="https://proxy:$HOT_TOKEN@192.168.64.1:3129" \
-  "$BUILDER" -- "arkade system install go"
+  "$SOURCE_VM" -- "arkade system install go"
 
 slicer proxy client delete "$HOT_CLIENT"
 ```
 
 Follow the [shutdown and status check](shutdown.md)
-with `VM_REF="$BUILDER"` to issue shutdown and wait for `Stopped`.
+with `VM_REF="$SOURCE_VM"` to issue shutdown and wait for `Stopped`.
 Run the commit block below only after that check succeeds:
 
 ```bash
 set -e -o pipefail
-slicer vm describe "$BUILDER" --json | jq -e '.status == "Stopped"' >/dev/null
-COMMIT=$(slicer vm commit "$BUILDER" \
+slicer vm describe "$SOURCE_VM" --json | jq -e '.status == "Stopped"' >/dev/null
+COMMIT=$(slicer vm commit "$SOURCE_VM" \
   --cache-key "$CACHE_KEY" \
   --tag "workflow=$WORKFLOW" \
   --json | jq -er '.commit_id')
 
-RUNNER=$(slicer vm fork "$COMMIT" \
+FORKED_VM=$(slicer vm fork "$COMMIT" \
   --tag "workflow=$WORKFLOW" \
-  --tag role=runner \
+  --tag role=fork \
   --wait \
   --json | jq -r '.hostname')
 
-COLD_CLIENT="runner-$RUNNER"
+COLD_CLIENT="fork-$FORKED_VM"
 COLD_TOKEN=$(slicer proxy client create "$COLD_CLIENT")
-# No runner rules means default-deny; add only required destinations.
+# Allow only the destinations this VM needs. The new client denies all by default.
 ```
 
-Pass `HOT_TOKEN` only as an environment value while preparing the builder.
-Do not install it into the builder disk before committing, because every fork
+Pass `HOT_TOKEN` only as an environment value while preparing the source VM.
+Do not install it into the source VM’s disk before committing, because every fork
 inherits that disk. Delete the hot client when preparation finishes. Give the
 fork `COLD_TOKEN` after launch, either per command or through the guest proxy
 helper. A client with no allow rules is fully denied; a client with a small
@@ -214,16 +208,16 @@ rule set is a restricted profile. Use a unique client per VM so audit,
 revocation, and policy remain isolated. The host-group firewall remains the
 same for every `sbox` VM—the client token selects policy at Slicer Proxy.
 
-Do not store reusable credentials or confidential inputs in the builder. Copy
-them into the runner after the fork, or keep them on the host and inject
+Do not store reusable credentials or confidential inputs in the source VM. Copy
+them into the forked VM after launch, or keep them on the host and inject
 short-lived access through Slicer Proxy.
 
 ## Concurrent platform workflows
 
 The daemon serialises commits which use the same cache key and rejects a
 different commit trying to claim an existing key. It does not prevent two
-callers from both performing builder setup after a simultaneous cache miss.
-Coordinate the initial build in the platform, then let all jobs reuse the
+callers from both preparing a source VM after a simultaneous cache miss.
+Coordinate the initial VM preparation, then let all jobs reuse the
 winning commit.
 
 Forks can run concurrently. Capture each JSON response independently and use
@@ -231,14 +225,14 @@ its `.hostname`; do not infer names or scan `vm list` for the newest VM.
 
 ## Cleanup
 
-Runners are persistent and must be deleted explicitly:
+When a persistent forked VM is no longer needed, delete it explicitly:
 
 ```bash
-slicer vm delete "$RUNNER"
+slicer vm delete "$FORKED_VM"
 ```
 
-For a disposable source builder, `slicer vm delete "$BUILDER"` after a
-successful commit leaves the commit reusable. Keep a requested builder
+For a disposable source VM, `slicer vm delete "$SOURCE_VM"` after a
+successful commit leaves the commit reusable. Keep a requested source VM
 stopped and available unless the workflow calls for its removal. Never delete a VM
 using a commit's historical `source_hostname`, which may now belong to another VM. After deleting
 all forked children, remove the commit when it is no longer needed:

@@ -64,10 +64,9 @@ for support checks and the online preparation → offline fork workflow.
   does not support the Linux per-fork `--allow`, `--no-allow`, or `--drop`
   overrides
 - The slicer-mac allow/drop configuration applies to networked `sbox` VMs
-  as a group. For a hot builder and a cold fork needing selective network
-  access, force `sbox` through Slicer Proxy
-  and assign different proxy clients: broad rules for the builder and no or
-  narrowly scoped rules for the runner
+  as a group. For selective egress, route the group through Slicer Proxy.
+  Give the source VM the access it needs during preparation, then give each
+  forked VM its own client with only the rules its workload needs.
 
 ### CIDR and host group conflicts
 

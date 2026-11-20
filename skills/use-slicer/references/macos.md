@@ -67,7 +67,7 @@ Do not target or reuse `slicer-1` for mutable tasks unless the user explicitly a
 
 ## Cold forking `sbox` VMs
 
-For an online builder and a completely offline runner, read
+For an online source VM and an offline fork, read
 [offline-vms.md](offline-vms.md): prepare with host-group networking, stop
 and commit, then fork with `--network none`. Request `none` for every offline
 fork. Omission or an empty value uses VZ NAT, even from an offline source.
@@ -84,11 +84,11 @@ overrides. The macOS backend is disk-only and supports `sbox` only.
 
 Network allow/drop settings apply to networked `sbox` VMs as a group, so macOS
 does not accept the Linux per-fork `--allow`, `--no-allow`, and `--drop`
-overrides. When runners need selective network access, force the host group
-through Slicer Proxy, use an open client while preparing a hot builder, and
-give each cold-forked runner a different default-deny or restricted client.
+overrides. When forked VMs need selective network access, force the host group
+through Slicer Proxy, use an open client while preparing the source VM, and
+give each forked VM a different default-deny or restricted client.
 Offline (`none`) VMs cannot reach Slicer Proxy. Never commit the hot client
-token into the builder disk.
+token to the source VM’s disk.
 See [cold-forking.md](cold-forking.md) for cleanup, cache, and proxy-client
 guidance.
 
