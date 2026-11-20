@@ -1,6 +1,6 @@
 ---
 name: use-slicer
-description: Launches, names, tags, prepares, and cold-forks Linux microVMs on macOS and Linux hosts. Use for declarative project workspaces with slicer workspace, sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, isolated development, and offline VMs.
+description: Creates and manages Slicer Linux microVMs on macOS and Linux hosts, including startup, status checks, shutdown, relaunch, and disk forks. Use for declarative project workspaces with slicer workspace, sandboxed builds, E2E tests, Docker, headless browser and DOM rendering, CI, isolated development, and offline VMs.
 allowed-tools: Bash
 ---
 
@@ -16,7 +16,7 @@ Virtualization on macOS. Use it when you need:
 - Kubernetes (k3s) clusters for testing
 - GPU/PCI passthrough workloads (via cloud-hypervisor backend)
 - Automated code review pipelines in ephemeral microVMs
-- Preparing one builder VM, then cold-forking clean runners without repeating setup
+- Reusing a prepared VM disk across multiple VMs
 - Running coding agents in isolated microVMs (Amp, Claude Code, Codex, OpenCode, GitHub Copilot CLI) then copying out the outcome - code, files, reports, binaries, images, etc.
 
 VMs boot in 1–3 seconds and have full systemd and SSH pre-installed. Networking
@@ -96,7 +96,7 @@ Deeper material is split into reference files — read the relevant one when a t
 - [references/headless-x11.md](references/headless-x11.md) — run X11 applications headlessly with Xvfb and capture terminal video with ffmpeg (Slicer for Mac and Slicer for Linux)
 - [references/vm-names-and-tags.md](references/vm-names-and-tags.md) — friendly CLI names, canonical hostnames, mutable tags, and raw API lookup
 - [references/agent-sandboxes.md](references/agent-sandboxes.md) — coding-agent sandbox detail
-- [references/cold-forking.md](references/cold-forking.md) — cache a prepared builder and fork clean runners
+- [references/cold-forking.md](references/cold-forking.md) — create a disk commit and fork VMs from it
 
 Companion skills: **`use-slicer-worktrees`** (git worktrees in a VM), **`use-slicer-proxy`** (filtered egress + secret injection).
 
@@ -186,7 +186,10 @@ export SLICER_TOKEN_FILE=/var/lib/slicer/auth/token   # may need sudo to read
 export SLICER_TOKEN=$(sudo cat /var/lib/slicer/auth/token)
 ```
 
-Check for a running daemon with `ps aux | grep -E "slicer|firecracker" | grep -v grep`. If the user supplies `SLICER_TOKEN` / `SLICER_TOKEN_FILE` or a specific endpoint, use those exactly and do not infer defaults.
+When the session already has a Slicer endpoint, run `slicer vm group --json`
+to check connectivity and discover its host groups. The CLI uses the session’s
+configured credentials. On a host with several daemons, inspect the config
+for that endpoint if you need its shutdown timeout or storage settings.
 
 ### Plain HTTP on a trusted LAN
 
@@ -595,27 +598,23 @@ slicer vm suspend VM_REF     # Save state to disk (snapshot)
 slicer vm restore VM_REF     # Restore from snapshot
 ```
 
+On Firecracker, `slicer vm shutdown` gives the guest up to 10s to acknowledge,
+then waits up to `config.shutdown_timeout` (default `1m`) for the VMM to exit.
+If the deadline expires, the daemon force-stops the VM. Shutdown continues
+after a client disconnect, and once acknowledged it can finish with the guest
+agent offline. On amd64 the guest performs an orderly reboot so systemd runs
+its stop jobs and the final reset exits Firecracker. A persistent VM stays
+stopped until relaunched. Use `--force` to stop the VMM directly.
+
+On macOS the command can return while the VM is still stopping. When the
+task requires confirmation, use the [shutdown and status check](references/shutdown.md)
+to wait for a persistent VM to report `Stopped`.
+
 ### Cold fork a prepared VM
 
-Prepare a persistent builder once, shut it down, and wait until it is stopped
-before committing its disk. Fork new VMs from that commit. On macOS, use the
-`sbox` host group. Follow the
-[cold-fork guidance](references/cold-forking.md#agent-safe-workflow)
-for shutdown, commit, and fork steps.
-
-Do not pass a child hostname to `vm fork`; Slicer allocates it. The same CLI
-and SDK workflow works with Slicer for Mac. macOS forks are disk-only APFS
-clones of `sbox` VMs. On supported macOS and Linux Firecracker builds, disk
-forks require `--network none` for every offline runner, even from an offline
-source. Omitted or empty uses host-group networking.
-See [references/offline-vms.md](references/offline-vms.md). macOS allow/drop
-settings apply to the whole `sbox` host group; use separate Slicer Proxy
-clients when networked runners need different egress policies. On Linux,
-`--allow`, `--no-allow`, and `--drop` require a networked VM in an isolated
-host group; online bridge-mode forks inherit their host group's networking.
-
-For cache hits, no-egress runners, cleanup, and agent-safety notes, read
-[references/cold-forking.md](references/cold-forking.md).
+To start another VM from a prepared disk, follow the
+[cold-fork workflow](references/cold-forking.md). For a fork that needs to
+run without a network interface, see [offline VMs](references/offline-vms.md).
 
 ### Monitoring
 
@@ -638,8 +637,8 @@ shell.
 slicer codex --worktree .    # push current git worktree and attach
 slicer codex ./my-project    # copy ./my-project in, then attach
 slicer codex                 # provision-only: VM + codex + creds, then stop
-slicer codex --name builder  # provision-only with a friendly CLI name
-slicer codex builder         # reattach by friendly name
+slicer codex --name dev-vm   # provision-only with a friendly CLI name
+slicer codex dev-vm          # reattach by friendly name
 ```
 
 No argument is provision-only; pass `.` explicitly to copy the current

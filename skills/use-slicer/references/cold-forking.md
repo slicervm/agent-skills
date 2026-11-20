@@ -1,7 +1,7 @@
 # Cold Forking Prepared VMs
 
-Cold forking commits the disk of a stopped, persistent builder VM, then starts
-clean children from that immutable disk state. Use it when setup is expensive
+Cold forking commits the disk of a stopped, persistent source VM, then starts
+new VMs from that immutable disk state. Use it when setup is expensive
 or every job should start from the same known state.
 
 ## Requirements and boundaries
@@ -18,11 +18,12 @@ boundaries are:
 Cold forking is different from suspend/restore: only disk state is reused;
 processes, sockets, and RAM are not.
 
-`slicer vm shutdown` initiates shutdown and can return while the VM is still
-running. Before committing or relaunching, poll `slicer vm describe VM_REF
---json` for `status: "Stopped"` with a bounded timeout. Stop on a failed lookup
-or timeout; a fixed sleep does not establish that shutdown completed. See the
-[shutdown polling example](offline-vms.md#prepare-online-then-fork-offline).
+Before committing or relaunching, confirm that the source VM reports `Stopped`.
+On macOS, `slicer vm shutdown` can return while the VM is still running.
+Read the [shutdown and status check](shutdown.md)
+before issuing shutdown. Start its deadline before the request using the
+daemon's configured grace period plus the acknowledgement and cleanup margin.
+Use the same deadline when checking the stopped state after the request returns.
 
 On supported builds, request `--network none` for each offline disk fork.
 Omitted or empty uses host-group networking, regardless of the source VM's
@@ -34,10 +35,10 @@ macOS rejects per-fork allow/drop overrides; its allow/drop configuration
 applies to networked `sbox` VMs as a group. Use separate Slicer Proxy clients
 when a runner needs selective network access. Offline VMs cannot reach the proxy.
 
-## Terms
+## Example roles and cache key
 
-- **Builder**: the original persistent VM which performs setup and is committed.
-- **Runner**: an allocator-named child forked from the commit.
+- **Builder**: the source VM prepared for reuse in the example below.
+- **Runner**: a VM forked from that commit to run a job.
 - **Cache key**: a caller-owned key which maps reusable setup inputs to a commit.
 
 Never choose a runner hostname. `slicer vm fork` accepts one positional value,
@@ -85,15 +86,15 @@ if [ -z "$COMMIT" ]; then
     "git clone https://github.com/alexellis/arkade /home/ubuntu/arkade && \
      cd /home/ubuntu/arkade && \
      /usr/local/go/bin/go build -mod=vendor -o ./arkade"
-
-  slicer vm shutdown "$BUILDER"
 fi
 ```
 
-For a new builder, follow the
-[shutdown polling example](offline-vms.md#prepare-online-then-fork-offline)
-to wait for `Stopped` with a bounded timeout. Stop on lookup failure or
-timeout; run the next block only after shutdown completes:
+On Firecracker, read `config.shutdown_timeout` from the active daemon's YAML
+before stopping the VM for a commit. If the config is unavailable, state the
+wait you assume. For a new builder, follow the
+[shutdown and status check](shutdown.md)
+with `VM_REF="$BUILDER"` to issue shutdown and wait for `Stopped`.
+Run the commit block below only after that check succeeds:
 
 ```bash
 set -e -o pipefail
@@ -103,7 +104,6 @@ if [ -z "$COMMIT" ]; then
     --cache-key "$CACHE_KEY" \
     --tag "workflow=$WORKFLOW" \
     --json | jq -er '.commit_id')
-  slicer vm delete "$BUILDER"
 fi
 ```
 
@@ -180,12 +180,11 @@ slicer vm exec \
   "$BUILDER" -- "arkade system install go"
 
 slicer proxy client delete "$HOT_CLIENT"
-slicer vm shutdown "$BUILDER"
 ```
 
-Follow the [shutdown polling example](offline-vms.md#prepare-online-then-fork-offline)
-to wait for `Stopped` with a bounded timeout. Stop on lookup failure or
-timeout; run the next block only after shutdown completes:
+Follow the [shutdown and status check](shutdown.md)
+with `VM_REF="$BUILDER"` to issue shutdown and wait for `Stopped`.
+Run the commit block below only after that check succeeds:
 
 ```bash
 set -e -o pipefail
@@ -194,7 +193,6 @@ COMMIT=$(slicer vm commit "$BUILDER" \
   --cache-key "$CACHE_KEY" \
   --tag "workflow=$WORKFLOW" \
   --json | jq -er '.commit_id')
-slicer vm delete "$BUILDER"
 
 RUNNER=$(slicer vm fork "$COMMIT" \
   --tag "workflow=$WORKFLOW" \
@@ -239,9 +237,10 @@ Runners are persistent and must be deleted explicitly:
 slicer vm delete "$RUNNER"
 ```
 
-The recipes delete the source builder immediately after a successful commit;
-the commit remains reusable. Never delete a VM using a commit's historical
-`source_hostname`: that hostname may now belong to another VM. After deleting
+For a disposable source builder, `slicer vm delete "$BUILDER"` after a
+successful commit leaves the commit reusable. Keep a requested builder
+stopped and available unless the workflow calls for its removal. Never delete a VM
+using a commit's historical `source_hostname`, which may now belong to another VM. After deleting
 all forked children, remove the commit when it is no longer needed:
 
 ```bash
