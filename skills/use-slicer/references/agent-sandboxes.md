@@ -97,14 +97,14 @@ A plain copy of a git worktree breaks: its `.git` is a *file* holding an absolut
 ## Cold-forked agent bases
 
 Cold forking can prepare compilers, linters, browsers, and agent binaries once,
-then create one runner per task. It works with Firecracker host groups on Linux
+then fork one VM per task. It works with Firecracker host groups on Linux
 and the `sbox` host group in Slicer for Mac. Do not put reusable agent
 credentials, repository credentials, customer data, or untrusted code into the
-committed builder: every child inherits its disk.
+source VM before committing its disk. Every fork inherits those files.
 
-Prefer copying credentials and code into each runner after the fork, or keep
+Prefer copying credentials and code into each forked VM after launch, or keep
 credentials on the host and use Slicer Proxy for narrowly scoped access. See
-[cold-forking.md](cold-forking.md) for the builder/cache/fork workflow.
+[cold-forking.md](cold-forking.md) for the steps to cache a disk commit and fork a VM.
 
 ## .slicerignore
 
